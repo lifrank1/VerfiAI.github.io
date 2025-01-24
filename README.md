@@ -1,1 +1,1 @@
-# VerfiAI
+# VerifAI
