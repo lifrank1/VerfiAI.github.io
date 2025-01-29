@@ -1,0 +1,82 @@
+/* Gradient background */
+.hero-section {
+    background: linear-gradient(135deg, #E6E6FA, #FFFFFF);
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  
+  @keyframes gradient-animation {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  /* App name styling */
+  .app-name {
+    font-size: 4.5rem;
+    font-weight: bold;
+    background: linear-gradient(
+      270deg,
+      #6E44FF,
+      #FF4D4D,
+      #6E44FF
+    );
+    background-size: 200% auto;
+    color: transparent;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: gradient-animation 6s ease infinite;
+    margin-bottom: 0.5rem;
+    text-shadow: none;
+  }
+
+  /* Tagline styling */
+  .tagline {
+    font-size: 1.5rem;
+    color: #333;
+    margin-bottom: 2rem;
+  }
+  /* Login button styling */
+  .login-button {
+    background-color: #FF4D4D;
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    font-size: 1.2rem;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  
+  .login-button:hover {
+    background-color: #FF1A1A;
+  }
+
+/* Add at the top of the file */
+body {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Update the app name font */
+.app-name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 4.5rem;
+  font-weight: 700;
+  /* other existing styles remain the same */
+}
+
+/* Update the tagline font */
+.tagline {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 400;
+  /* other existing styles remain the same */
+}
