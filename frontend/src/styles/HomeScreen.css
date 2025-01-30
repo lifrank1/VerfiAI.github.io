@@ -1,82 +1,200 @@
-/* Gradient background */
-.hero-section {
-    background: linear-gradient(135deg, #E6E6FA, #FFFFFF);
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-  }
-  
-  @keyframes gradient-animation {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-  /* App name styling */
-  .app-name {
-    font-size: 4.5rem;
-    font-weight: bold;
-    background: linear-gradient(
-      270deg,
-      #6E44FF,
-      #FF4D4D,
-      #6E44FF
-    );
-    background-size: 200% auto;
-    color: transparent;
-    -webkit-background-clip: text;
-    background-clip: text;
-    animation: gradient-animation 6s ease infinite;
-    margin-bottom: 0.5rem;
-    text-shadow: none;
-  }
-
-  /* Tagline styling */
-  .tagline {
-    font-size: 1.5rem;
-    color: #333;
-    margin-bottom: 2rem;
-  }
-  /* Login button styling */
-  .login-button {
-    background-color: #FF4D4D;
-    color: white;
-    border: none;
-    padding: 1rem 2rem;
-    font-size: 1.2rem;
-    border-radius: 25px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
-  
-  .login-button:hover {
-    background-color: #FF1A1A;
-  }
-
-/* Add at the top of the file */
-body {
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
   font-family: 'Poppins', sans-serif;
 }
 
-/* Update the app name font */
+.page-container {
+  width: 100%;
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  position: relative;
+  background: #E6E6FA;
+}
+
+.hero-section, .idea-section {
+  scroll-snap-align: start;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: transparent;
+}
+
 .app-name {
-  font-family: 'Poppins', sans-serif;
   font-size: 4.5rem;
-  font-weight: 700;
-  /* other existing styles remain the same */
+  font-weight: bold;
+  background: linear-gradient(
+    270deg,
+    #6E44FF,
+    #FF4D4D,
+    #6E44FF
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: gradient-animation 10s ease infinite;
+  margin-bottom: 0.5rem;
+  text-shadow: none;
 }
 
-/* Update the tagline font */
 .tagline {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 400;
-  /* other existing styles remain the same */
+  font-size: 1.5rem;
+  color: #333;
+  margin-bottom: 2rem;
+}
+
+.login-button {
+  background-color: #FF4D4D;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.login-button:hover {
+  background-color: #FF1A1A;
+}
+
+.highlight-word {
+  position: relative;
+  display: inline-block;
+  color: #333;
+  margin: 0 4px;
+  padding: 0 2px;
+}
+
+.highlight-word::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  height: 4px;
+  width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #FF4D4D, #FF1A1A);
+  animation: underlineSlide 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+  transform-origin: left;
+}
+
+.vision-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.vision-text {
+  flex: 1;
+  padding-right: 4rem;
+}
+
+.vision-image {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.idea-section h2 {
+  font-size: 3rem;
+  font-weight: bold;
+  background: linear-gradient(
+    270deg,
+    #6E44FF,
+    #FF4D4D,
+    #6E44FF
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: gradient-animation 10s ease infinite;
+  margin-bottom: 2rem;
+  text-shadow: none;
+}
+
+.idea-section p {
+  font-size: 1.3rem;
+  line-height: 1.6;
+  color: #333;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+.word-container {
+  position: relative;
+  height: 60px;
+  width: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: visible;
+  margin: 0 auto;
+}
+
+
+.animated-word {
+  position: absolute;
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: #6E44FF;
+  opacity: 0;
+  transform: translateX(100%) scale(0.9);
+  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.animated-word.active {
+  opacity: 1;
+  transform: translateX(0) scale(1.1);
+}
+
+.animated-word.exit {
+  opacity: 0;
+  transform: translateX(-100%) scale(0.9);
+}
+
+@keyframes gradient-animation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes underlineSlide {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+.scroll-indicator {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: bounce 2s infinite;
+  cursor: pointer;
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-30px); }
+  60% { transform: translateY(-15px); }
 }
