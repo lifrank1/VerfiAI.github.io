@@ -6,6 +6,7 @@
     justify-content: center;
     align-items: center;
     background: #E6E6FA;
+    position: relative;
   }
   
   .login-section {
@@ -64,6 +65,21 @@
     color: red;
     margin-bottom: 1rem;
   }
+
+  .back-button {
+    background-color: #6e44ff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-top: 10px;
+  }
+  
+  .back-button:hover {
+    background-color: #5a38cc;
+  }
+  
   
   @keyframes gradient-animation {
     0% { background-position: 0% 50%; }

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { firebaseApp } from '../firebase-config';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';  // Importing useNavigate for routing
 import '../styles/LoginScreen.css';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate();  // Initialize navigate
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -20,6 +23,10 @@ const LoginScreen = () => {
       .catch((error) => {
         setError(error.message);
       });
+  };
+
+  const handleBack = () => {
+    navigate(-1);  // Navigate back to the previous page
   };
 
   return (
@@ -46,6 +53,12 @@ const LoginScreen = () => {
           {error && <p className="error-message">{error}</p>}
           <button type="submit" className="login-button">Log In</button>
         </form>
+
+        <div className="create-account-link">
+          <p>Don't have an account? <Link to="/create-account">Create one</Link></p>
+        </div>
+
+        <button onClick={handleBack} className="back-button">Back to Home</button> {/* Back button */}
       </div>
     </div>
   );
