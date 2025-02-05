@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import '../styles/HomeScreen.css';
 
 const WordAnimation = () => {
@@ -45,7 +46,9 @@ const HomeScreen = () => {
             <span className="highlight-word">detect</span> AI-generated content, and 
             <span className="highlight-word">ensure</span> academic integrity.
           </p>
+          <Link to="/LoginScreen">
           <button className="login-button">Log In</button>
+          </Link>
           <div className="scroll-indicator" onClick={scrollToNextSection}>
             <svg width="24" height="24" viewBox="0 0 24 24">
               <path d="M7 10l5 5 5-5z" fill="#6E44FF"/>

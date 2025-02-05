@@ -3,41 +3,43 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-      "frontend"
+    "frontend"
   ],
   "scripts": {
-      "start": "cd frontend && npm start",
-      "build": "cd frontend && npm build",
-      "test": "cd frontend && npm test",
-      "eject": "cd frontend && npm eject",
-      "lint": "eslint .",
-      "format": "prettier --write ."
+    "start": "cd frontend && npm start",
+    "build": "cd frontend && npm build",
+    "test": "cd frontend && npm test",
+    "eject": "cd frontend && npm eject",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "eslintConfig": {
-      "extends": [
-          "react-app",
-          "react-app/jest"
-      ]
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
   },
   "dependencies": {
-      "react": "^18.2.0",
-      "react-dom": "^18.2.0"
+    "firebase": "^11.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.1.5"
   },
   "devDependencies": {
-      "eslint": "^8.56.0",
-      "prettier": "^3.2.5",
-      "eslint-config-prettier": "^9.1.0"
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.2.5"
   },
   "browserslist": {
-      "production": [
-          ">0.2%",
-          "not dead",
-          "not op_mini all"
-      ],
-      "development": [
-          "last 1 chrome version",
-          "last 1 firefox version",
-          "last 1 safari version"
-      ]
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

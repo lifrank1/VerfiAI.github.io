@@ -2,7 +2,6 @@
 # Dependencies
 /node_modules
 /frontend/node_modules
-
 /.pnp
 .pnp.js
 
@@ -39,3 +38,6 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+#config file
+/frontend/src/firebase-config.js
