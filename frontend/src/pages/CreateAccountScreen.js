@@ -32,15 +32,14 @@ const CreateAccountScreen = () => {
         console.log('Account created successfully', userCredential);
 
         // After account creation, store the additional user information in Firestore
-        const userId = userCredential.user.uid; // Get the user's unique ID
+        const userId = userCredential.user.uid; 
 
         try {
-          // Save the user data to Firestore under 'users' collection
           await setDoc(doc(db, 'users', userId), {
             firstName,
             lastName,
             email,
-            createdAt: new Date(), // You can also store when the account was created
+            createdAt: new Date(), //Stores when account created 
           });
 
           // After saving user data, redirect to home screen
