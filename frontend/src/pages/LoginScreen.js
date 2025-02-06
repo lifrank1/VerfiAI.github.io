@@ -19,6 +19,7 @@ const LoginScreen = () => {
       .then((userCredential) => {
         console.log('Logged in successfully', userCredential);
         // Redirect to the home screen or dashboard after login
+        navigate('/');
       })
       .catch((error) => {
         setError(error.message);
