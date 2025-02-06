@@ -14,15 +14,33 @@ const LoginScreen = () => {
   const handleLogin = (e) => {
     e.preventDefault();
     const auth = getAuth(firebaseApp);
-    
+  
     signInWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
-        console.log('Logged in successfully', userCredential);
-        // Redirect to the home screen or dashboard after login
-        navigate('/');
+        console.log("Logged in successfully", userCredential);
+        navigate("/"); // Redirect user after successful login
       })
       .catch((error) => {
-        setError(error.message);
+        console.error("Full Firebase Error:", error); // Print full error object
+        console.error("Firebase Error Code:", error.code); // Print error code specifically
+  
+        // Map Firebase error codes to user-friendly messages
+        const errorMessages = {
+          "auth/invalid-credential": "Invalid email or password.",
+          "auth/user-disabled": "This account has been disabled. Contact support.",
+          "auth/user-not-found": "No account found with this email. Please sign up.",
+          "auth/too-many-requests": "Too many failed attempts. Try again later.",
+          "auth/network-request-failed": "Network error. Check your connection.",
+        };
+  
+        // Check if error.code is undefined or not matching
+        if (!error.code) {
+          console.error("Error Code is Undefined:", error);
+        }
+  
+        // Set error message or return default
+        const errorMessage = errorMessages[error.code] || `Unexpected error: ${error.message}`;
+        setError(errorMessage);
       });
   };
 
