@@ -2,6 +2,7 @@
 # Dependencies
 /node_modules
 /frontend/node_modules
+/backend/node_modules
 /.pnp
 .pnp.js
 
@@ -43,4 +44,4 @@ Thumbs.db
 /frontend/src/firebase-config.js
 
 #database private key
-/firebase-adminsdk.json
+backend/firebase-adminsdk.json
