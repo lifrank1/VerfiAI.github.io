@@ -41,3 +41,6 @@ Thumbs.db
 
 #config file
 /frontend/src/firebase-config.js
+
+#database private key
+/firebase-adminsdk.json

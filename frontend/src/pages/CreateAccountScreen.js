@@ -1,110 +1,103 @@
-// CreateAccountScreen.js
-import React, { useState } from 'react';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { firebaseApp, db } from '../firebase-config';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { setDoc, doc } from 'firebase/firestore'; // Firestore methods
-import '../styles/LoginScreen.css';
+import '../styles/LoginScreen.css';  // Ensure this import is at the top
 
-const CreateAccountScreen = () => {
+function CreateAccount() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [verifyPassword, setVerifyPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirm password state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const navigate = useNavigate(); // Hook to navigate after account creation
+  const [passwordMismatchError, setPasswordMismatchError] = useState(''); // Error for password mismatch
+  const navigate = useNavigate();
 
-  const handleCreateAccount = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Check if passwords match
-    if (password !== verifyPassword) {
-      setPasswordError('Passwords do not match');
-      return;
+    if (password !== confirmPassword) {
+      setPasswordMismatchError("Passwords do not match.");
+      return; // Prevent form submission if passwords don't match
     }
 
-    const auth = getAuth(firebaseApp);
-
-    createUserWithEmailAndPassword(auth, email, password)
-      .then(async (userCredential) => {
-        console.log('Account created successfully', userCredential);
-
-        // After account creation, store the additional user information in Firestore
-        const userId = userCredential.user.uid; 
-
-        try {
-          await setDoc(doc(db, 'users', userId), {
-            firstName,
-            lastName,
-            email,
-            createdAt: new Date(), //Stores when account created 
-          });
-
-          // After saving user data, redirect to home screen
-          navigate('/');
-        } catch (firestoreError) {
-          setError('Error saving user data: ' + firestoreError.message);
-        }
-      })
-      .catch((error) => {
-        setError(error.message); // Display any errors during account creation
+    try {
+      const response = await fetch('http://localhost:5000/api/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, firstName, lastName }),
       });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('User created:', data);
+        navigate('/');  // Redirect to home screen
+      } else {
+        setError(data.message || 'Failed to create account');
+      }
+    } catch (error) {
+      setError('Error: ' + error.message);
+    }
   };
 
   return (
     <div className="login-page-container">
       <div className="login-section">
-        <h1 className="app-name">VerifAI</h1>
-        <form onSubmit={handleCreateAccount} className="login-form">
+        <h2>Create an Account</h2>
+        {error && <p className="error-message">{error}</p>}
+        {passwordMismatchError && <p className="error-message">{passwordMismatchError}</p>} {/* Display password mismatch error */}
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
-            className="input-field"
             placeholder="First Name"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
+            className="input-field"
             required
           />
           <input
             type="text"
-            className="input-field"
             placeholder="Last Name"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
+            className="input-field"
             required
           />
           <input
             type="email"
-            className="input-field"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="input-field"
             required
           />
           <input
             type="password"
-            className="input-field"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="input-field"
             required
           />
           <input
             type="password"
+            placeholder="Confirm Password" // Added confirm password input
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             className="input-field"
-            placeholder="Verify Password"
-            value={verifyPassword}
-            onChange={(e) => setVerifyPassword(e.target.value)}
             required
           />
-          {error && <p className="error-message">{error}</p>}
-          {passwordError && <p className="error-message">{passwordError}</p>}
-          <button type="submit" className="login-button">Create Account</button>
+          <button type="submit" className="login-button">
+            Create Account
+          </button>
         </form>
+        <button className="back-button" onClick={() => navigate('/')}>
+          Go Back
+        </button>
       </div>
     </div>
   );
-};
+}
 
-export default CreateAccountScreen;
+export default CreateAccount;
