@@ -20,11 +20,14 @@ app.post('/api/create-user', async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
 
   try {
-    // 🔹 Check if the email already exists using Firebase Authentication
-    const existingUser = await admin.auth().getUserByEmail(email);
-    if (existingUser) {
-      // If the email already exists, send an error response
+    // 🔹 Check if the email already exists
+    try {
+      await admin.auth().getUserByEmail(email);
       return res.status(400).json({ success: false, message: 'Email already in use.' });
+    } catch (error) {
+      if (error.code !== 'auth/user-not-found') {
+        throw error; // Only throw if it's an unexpected error
+      }
     }
     
     // 🔹 Create the user in Firebase Authentication
