@@ -41,7 +41,7 @@ ehthumbs.db
 Thumbs.db
 
 #config file
-/frontend/src/firebase-config.js
+#/frontend/src/firebase-config.js
 
 #database private key
-backend/firebase-adminsdk.json
+#backend/firebase-adminsdk.json
