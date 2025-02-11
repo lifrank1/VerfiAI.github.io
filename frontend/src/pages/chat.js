@@ -48,20 +48,22 @@ const Chat = () => {
       const loadingMessage = { type: "bot", text: "..." };
       setMessages((prev) => [...prev, loadingMessage]);
 
-      // Make API call to Deepseek
-      const response = await axios.post(
-        "https://api.deepseek.com/v1/chat/completions",
-        {
-          model: "deepseek-chat",
-          messages: [{ role: "user", content: input }],
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.REACT_APP_DEEPSEEK_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // Format messages for Gemini
+      const messageHistory = messages.map((msg) => ({
+        role: msg.type === "user" ? "user" : "assistant",
+        content: msg.text,
+      }));
+
+      // Add current message
+      messageHistory.push({
+        role: "user",
+        content: input,
+      });
+
+      // Make API call to your backend
+      const response = await axios.post("http://localhost:3002/api/chat", {
+        messages: messageHistory,
+      });
 
       // Remove loading message and add AI response
       setMessages((prev) => prev.slice(0, -1)); // Remove loading message
@@ -71,12 +73,11 @@ const Chat = () => {
       };
       setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
-      console.error("Error calling Deepseek API:", error);
-      // Remove loading message and show error
+      console.error("Error calling Gemini API:", error.response?.data || error);
       setMessages((prev) => prev.slice(0, -1));
       const errorMessage = {
         type: "bot",
-        text: "Sorry, I encountered an error. Please try again.",
+        text: `Error: ${error.response?.data?.error || error.message}`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     }
