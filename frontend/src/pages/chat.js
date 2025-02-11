@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet";
 import { useNavigate } from "react-router-dom";
 import { getAuth, signOut } from "firebase/auth";
 import { firebaseApp } from "../firebase-config";
+import axios from "axios";
 
 const Chat = () => {
   const [messages, setMessages] = useState([
@@ -35,19 +36,50 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (input.trim() === "") return;
+
     const newUserMessage = { type: "user", text: input };
     setMessages((prev) => [...prev, newUserMessage]);
     setInput("");
-    // Insert a dummy bot reply after a short delay
-    setTimeout(() => {
-      const newBotMessage = {
+
+    try {
+      // Show loading message
+      const loadingMessage = { type: "bot", text: "..." };
+      setMessages((prev) => [...prev, loadingMessage]);
+
+      // Make API call to Deepseek
+      const response = await axios.post(
+        "https://api.deepseek.com/v1/chat/completions",
+        {
+          model: "deepseek-chat",
+          messages: [{ role: "user", content: input }],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.REACT_APP_DEEPSEEK_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // Remove loading message and add AI response
+      setMessages((prev) => prev.slice(0, -1)); // Remove loading message
+      const aiResponse = {
         type: "bot",
-        text: "This is a dummy response. In the future, this will be replaced with actual AI responses.",
+        text: response.data.choices[0].message.content,
       };
-      setMessages((prev) => [...prev, newBotMessage]);
-    }, 500);
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      console.error("Error calling Deepseek API:", error);
+      // Remove loading message and show error
+      setMessages((prev) => prev.slice(0, -1));
+      const errorMessage = {
+        type: "bot",
+        text: "Sorry, I encountered an error. Please try again.",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
   };
 
   const handleKeyPress = (e) => {

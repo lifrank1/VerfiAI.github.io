@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
+const axios = require("axios");
 
 // 🔹 Load Firebase Admin credentials (get this from Firebase console)
 const serviceAccount = require("./firebase-adminsdk.json");
@@ -51,6 +52,28 @@ app.post("/api/create-user", async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+});
+
+// 🔹 API route to send a message to Deepseek
+app.post("/api/chat", async (req, res) => {
+  try {
+    const response = await axios.post(
+      "https://api.deepseek.com/v1/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: req.body.messages,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
