@@ -1,0 +1,4 @@
+GEMINI_API_KEY=<INPUT KEY HERE!>
+
+get this at https://aistudio.google.com/app/u/5/apikey
+make a .env file in this backend dir
