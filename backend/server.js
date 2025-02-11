@@ -1,9 +1,9 @@
-const express = require('express');
-const cors = require('cors');
-const admin = require('firebase-admin');
+const express = require("express");
+const cors = require("cors");
+const admin = require("firebase-admin");
 
 // 🔹 Load Firebase Admin credentials (get this from Firebase console)
-const serviceAccount = require('./firebase-adminsdk.json');
+const serviceAccount = require("./firebase-adminsdk.json");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -16,28 +16,18 @@ app.use(express.json()); // Allow JSON requests
 const db = admin.firestore();
 
 // 🔹 API route to create a new user
-app.post('/api/create-user', async (req, res) => {
+app.post("/api/create-user", async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
 
   try {
-    // 🔹 Check if the email already exists
-    try {
-      await admin.auth().getUserByEmail(email);
-      return res.status(400).json({ success: false, message: 'Email already in use.' });
-    } catch (error) {
-      if (error.code !== 'auth/user-not-found') {
-        throw error; // Only throw if it's an unexpected error
-      }
-    }
-    
-    // 🔹 Create the user in Firebase Authentication
+    // Try to create the user first
     const userRecord = await admin.auth().createUser({
       email,
       password,
     });
 
-    // 🔹 Store additional user details in Firestore
-    await db.collection('users').doc(userRecord.uid).set({
+    // If successful, store additional user details in Firestore
+    await db.collection("users").doc(userRecord.uid).set({
       firstName,
       lastName,
       email,
@@ -46,19 +36,25 @@ app.post('/api/create-user', async (req, res) => {
 
     res.json({ success: true, uid: userRecord.uid });
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error("Error creating user:", error);
 
-    // If Firebase throws an error about the email being already used, handle it
-    if (error.code === 'auth/email-already-exists') {
-      return res.status(400).json({ success: false, message: 'Email already in use.' });
+    // Handle specific Firebase error codes
+    if (error.code === "auth/email-already-exists") {
+      return res.status(400).json({
+        success: false,
+        message: "Email already in use.",
+      });
     }
 
     // For other errors, send the message from Firebase
-    res.status(400).json({ success: false, message: error.message });
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 
 // 🔹 Start the backend server
-app.listen(5000, () => {
-  console.log('Server running on port 5000');
+app.listen(3002, () => {
+  console.log("Server running on port 3002");
 });
