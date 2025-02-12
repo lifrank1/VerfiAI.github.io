@@ -41,40 +41,51 @@ app.post("/api/create-user", async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
 
   try {
-    // Try to create the user first
-    const userRecord = await admin.auth().createUser({
-      email,
-      password,
+    // Check if email exists first
+    const usersByEmail = await admin.auth().getUserByEmail(email);
+    
+    // If we get here, the email exists
+    return res.status(400).json({
+      success: false,
+      message: "Email already in use.",
     });
-
-    // If successful, store additional user details in Firestore
-    await db.collection("users").doc(userRecord.uid).set({
-      firstName,
-      lastName,
-      email,
-      createdAt: new Date(),
-    });
-
-    res.json({ success: true, uid: userRecord.uid });
   } catch (error) {
-    console.error("Error creating user:", error);
+    // If error code is auth/user-not-found, the email is available
+    if (error.code === 'auth/user-not-found') {
+      try {
+        // Create the new user
+        const userRecord = await admin.auth().createUser({
+          email,
+          password,
+        });
 
-    // Handle specific Firebase error codes
-    if (error.code === "auth/email-already-exists") {
-      return res.status(400).json({
-        success: false,
-        message: "Email already in use.",
-      });
+        // Store additional user details in Firestore
+        await db.collection("users").doc(userRecord.uid).set({
+          firstName,
+          lastName,
+          email,
+          createdAt: new Date(),
+        });
+
+        return res.json({ success: true, uid: userRecord.uid });
+
+      } catch (createError) {
+        console.error("Error creating user:", createError);
+        return res.status(400).json({
+          success: false,
+          message: createError.message,
+        });
+      }
     }
 
-    // For other errors, send the message from Firebase
-    res.status(400).json({
+    // Handle any other errors
+    console.error("Error checking email:", error);
+    return res.status(400).json({
       success: false,
       message: error.message,
     });
   }
 });
-
 // 🔹 API route to send a message to Deepseek
 app.post("/api/chat", async (req, res) => {
   try {
