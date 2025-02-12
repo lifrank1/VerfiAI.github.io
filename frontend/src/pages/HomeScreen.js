@@ -42,9 +42,9 @@ const HomeScreen = () => {
         <div className="container text-center">
           <h1 className="app-name">VerifAI</h1>
           <p className="tagline">
-            <span className="highlight-word">Verify</span> references, 
-            <span className="highlight-word">detect</span> AI-generated content, and 
-            <span className="highlight-word">ensure</span> academic integrity.
+            <span className="highlight-word">Verify</span>references, 
+            <span className="highlight-word">detect</span>AI-generated content, and 
+            <span className="highlight-word">ensure</span>academic integrity.
           </p>
           <Link to="/LoginScreen">
           <button className="login-button">Log In</button>
