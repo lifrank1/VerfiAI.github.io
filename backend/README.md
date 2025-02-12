@@ -23,7 +23,7 @@ This is the backend service for VerifAI, built with **Node.js** and **Express.js
    - Create a \`.env\` file in the root directory.
    - Add the following:
      \`\`\`ini
-     GEMINI_API_KEY=<YOUR_KEY_HERE> 
+     GEMINI_API_KEY=<The_KEY_HERE> 
      \`\`\`
 
 4. Start the server:
