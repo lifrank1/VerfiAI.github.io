@@ -1,0 +1,224 @@
+openapi: 3.1.0
+info:
+  title: VerifAI API
+  description: An AI Verification System for managing Gemini AI models and Firebase configurations.
+  version: 1.0.0
+  contact:
+    name: VerifAI Team
+    email: support@verifai.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3002
+    description: Local development server
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: GEMINI_API_KEY
+
+  parameters:
+    GEMINI_API_KEY:
+      name: GEMINI_API_KEY
+      in: header
+      required: true
+      schema:
+        type: string
+        example: "your-gemini-api-key"
+      description: API Key required to access Gemini endpoints
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message describing what went wrong
+        code:
+          type: integer
+          description: HTTP status code
+      required:
+        - error
+        - code
+      example:
+        error: "Unauthorized - Invalid API Key"
+        code: 401
+
+    GeminiModel:
+      type: object
+      properties:
+        model:
+          type: string
+          description: Name of the Gemini model
+          example: gemini-pro
+        provider:
+          type: string
+          description: Provider of the AI model
+          example: google
+      required:
+        - model
+        - provider
+
+    FirebaseConfig:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Type of Firebase service
+          example: firestore
+        config_file:
+          type: string
+          description: Path to the Firebase configuration file
+          example: firebase-adminsdk.json
+      required:
+        - type
+        - config_file
+
+paths:
+  /api/v1/gemini:
+    get:
+      tags:
+        - Gemini
+      summary: Get Gemini Model Info
+      description: Retrieves information about the Gemini model.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GEMINI_API_KEY'
+      responses:
+        '200':
+          description: Successfully retrieved Gemini model info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiModel'
+        '401':
+          description: Unauthorized - Invalid API Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Gemini
+      summary: Create Gemini Model
+      description: Creates a new Gemini model configuration.
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiModel'
+      responses:
+        '201':
+          description: Gemini model created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiModel'
+        '400':
+          description: Bad Request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/firebase:
+    get:
+      tags:
+        - Firebase
+      summary: Get Firebase Configuration
+      description: Retrieves Firebase configuration details.
+      responses:
+        '200':
+          description: Successfully retrieved Firebase config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirebaseConfig'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Firebase
+      summary: Create Firebase Configuration
+      description: Creates a new Firebase configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirebaseConfig'
+      responses:
+        '201':
+          description: Firebase configuration created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirebaseConfig'
+        '400':
+          description: Bad Request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: Gemini
+    description: Endpoints related to Gemini AI model
+  - name: Firebase
+    description: Endpoints related to Firebase configuration
