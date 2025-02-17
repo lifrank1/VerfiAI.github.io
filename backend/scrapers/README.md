@@ -10,4 +10,7 @@ This scraper helps verify  citations and detect AI-generated false references.
 
 ## Installation Requirement:
 pip install requests beautifulsoup4
+pip install lxml
 
+# Sample run:
+python3 backend/scrapers/check_paper.py "deep learning"
