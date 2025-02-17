@@ -69,30 +69,46 @@ app.post("/api/create-user", async (req, res) => {
   const { email, password, firstName, lastName } = req.body;
 
   try {
-    const userRecord = await admin.auth().createUser({
-      email,
-      password,
-    });
+    // Check if email exists first
+    try {
+      await admin.auth().getUserByEmail(email);
+      // If we get here, the email exists
+      return res.status(400).json({
+        success: false,
+        message: "Email already in use."
+      });
+    } catch (error) {
+      // If error code is auth/user-not-found, the email is available
+      if (error.code === 'auth/user-not-found') {
+        // Create the new user
+        const userRecord = await admin.auth().createUser({
+          email,
+          password,
+        });
 
-    await db.collection("users").doc(userRecord.uid).set({
-      firstName,
-      lastName,
-      email,
-      createdAt: new Date(),
-    });
+        // Store additional user details in Firestore
+        await db.collection("users").doc(userRecord.uid).set({
+          firstName,
+          lastName,
+          email,
+          createdAt: new Date(),
+        });
 
-    res.json({ success: true, uid: userRecord.uid });
+        return res.json({ success: true, uid: userRecord.uid });
+      }
+    }
+    
+    // Handle any other errors
+    console.error("Error checking email:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
   } catch (error) {
     console.error("Error creating user:", error);
-
-    if (error.code === "auth/email-already-exists") {
-      return res.status(400).json({ success: false, message: "Email already in use." });
-    }
-
     res.status(400).json({ success: false, message: error.message });
   }
 });
-
 /**
  * 🔹 API: Chatbot Using Google Gemini AI
  */
