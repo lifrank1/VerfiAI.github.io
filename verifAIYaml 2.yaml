@@ -1,0 +1,93 @@
+openapi: 3.1.0
+info:
+  title: VerifAI API
+  description: AI Verification System
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3002
+    description: Local development server
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: GEMINI_API_KEY
+
+  parameters:
+    GEMINI_API_KEY:
+      name: GEMINI_API_KEY
+      in: header
+      required: true
+      schema:
+        type: string
+      description: API Key for Gemini service
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+
+paths:
+  /api/v1/gemini:
+    get:
+      summary: Get Gemini Model Info
+      description: Retrieves information about the Gemini model.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GEMINI_API_KEY'
+      responses:
+        '200':
+          description: Successfully retrieved Gemini model info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  model:
+                    type: string
+                  provider:
+                    type: string
+                    example: google
+        '401':
+          description: Unauthorized - Invalid API Key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/firebase:
+    get:
+      summary: Get Firebase Configuration
+      description: Retrieves Firebase configuration details.
+      responses:
+        '200':
+          description: Successfully retrieved Firebase config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: firestore
+                  config_file:
+                    type: string
+                    example: firebase-adminsdk.json
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: Gemini
+    description: Endpoints related to Gemini AI model
+  - name: Firebase
+    description: Endpoints related to Firebase configuration
