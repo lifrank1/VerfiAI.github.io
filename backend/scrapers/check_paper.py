@@ -13,7 +13,7 @@ def search_arxiv(query):
 
     response = requests.get(base_url, params=params)
     if response.status_code == 200:
-        soup = BeautifulSoup(response.text, "xml")
+        soup = BeautifulSoup(response.text, "lxml-xml")  # Explicitly use lxml parser
         entries = soup.find_all("entry")
 
         return [{"title": entry.title.text.strip(), "link": entry.id.text.strip()} for entry in entries] if entries else []
