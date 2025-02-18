@@ -62,7 +62,6 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 
 - [Frontend README](./frontend/README.md) – Learn more about the frontend setup and components. 
 - [Backend README](./backend/README.md) – Discover the backend architecture, API endpoints, and server-side logic.
-- [WebScraper README]
+- [WebScraper README](./backend/scrapers/README.md) - Explore the web scraper setup, how it extracts citation data, and how to install it. 
 
-Feel free to explore both sections for in-depth information on how each part of **VerifAI** works!
 
