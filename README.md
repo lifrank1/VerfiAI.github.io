@@ -1,4 +1,10 @@
 # VerifAI
+
+## Table of Contents
+- [Project Summary](#project Summary)
+- [Installation](#installation)
+- 
+
 ## Project Summary  
 
 **VerifAI** is an open-source AI-driven tool designed to enhance academic integrity by verifying research citations. It analyzes a paper’s references to determine:  
@@ -19,10 +25,6 @@
  **Academic Researchers** – Ensure research papers meet citation standards before submission  
  **Professors & Instructors** – Cross-check references in student work for accuracy  
 
-
-## Table of Contents
-- [Installation](#installation)
-- 
 
 ## Installation
 1) Clone the repository
