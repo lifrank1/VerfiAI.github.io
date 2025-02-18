@@ -28,13 +28,15 @@
 
 
 ## Installation
-1) Clone the repository
-2) Navigate to the terminal from the cloned repository
-3) run 'npm install' to get the dependencies
-4) run 'npm start' to start the localhost frontend server
-5) Navigate to the backend folder from the terminal
-6) run 'npm install' to get the dependencies for the backend
-7) run 'node backend/server.js' to start the localhost backend server
+Clone this repository: ```bash git clone https://github.com/ShashankRaghuraj/VerfiAI.git cd verifai-backend ```
+
+Install dependencies: ```bash npm install ```
+
+Set up the environment variables:
+
+Create a `.env` file in the root directory.
+Add the following: ```ini GEMINI_API_KEY=<THE_KEY_HERE> ```
+Start the server: ```bash npm start ```
 
 ## Technology Stack  
 
