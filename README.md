@@ -55,3 +55,13 @@
 ### Containerization  
 - **Docker** – Ensures consistent deployment across environments  
 
+## Access Frontend and Backend Documentation
+
+You can find the detailed documentation for the **frontend**, **backend**, and **web scraper** below:
+
+- [Frontend README](./frontend/README.md) – Learn more about the frontend setup and components. 
+- [Backend README](./backend/README.md) – Discover the backend architecture, API endpoints, and server-side logic.
+- [WebScraper README]
+
+Feel free to explore both sections for in-depth information on how each part of **VerifAI** works!
+
