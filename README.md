@@ -4,6 +4,7 @@
 - [Project Summary](#project-summary)
 - [Installation](#installation)
 - [Technology Stack](#technology-stack)
+- [Access Frontend, Backend, WebScraper Documentation](#Access-Frontend,-Backend,-WebScraper-Documentation)
 
 ## Project Summary  
 
@@ -55,7 +56,7 @@
 ### Containerization  
 - **Docker** – Ensures consistent deployment across environments  
 
-## Access Frontend and Backend Documentation
+## Access Frontend, Backend, WebScraper Documentation
 
 You can find the detailed documentation for the **frontend**, **backend**, and **web scraper** below:
 
