@@ -37,18 +37,18 @@
 
 ## Technology Stack  
 
-### 🔹 Front End  
+### Front End  
 - **React.js** – Dynamic and interactive UI  
 - **Bootstrap.js** – Responsive and visually appealing design  
 
-### 🔹 Back End  
+### Back End  
 - **Node.js with Express.js** – Handles server-side logic, API endpoints, and database interactions  
 
-### 🔹 Database & Storage  
+### Database & Storage  
 - **Firebase** – Manages user authentication and data storage  
 - **AWS S3** – Handles large-scale file uploads  
 
-### 🔹 Web Scraping & AI Processing  
+### Web Scraping & AI Processing  
 - **BeautifulSoup** – Extracts citation data from web pages  
 - **Hugging Face AI** – Classifies article genres to suggest relevant citations  
 
