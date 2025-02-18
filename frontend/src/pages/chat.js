@@ -96,6 +96,15 @@ const Chat = () => {
           <p><b>📅 Year:</b> {year}</p>
           <p><b>🔗 DOI:</b> {doi}</p>
           {retractionNotice}
+          <p><b>📝 Suggested Citation:</b></p>
+          <div style={{ 
+            background: "#f5f5f5", 
+            padding: "1rem", 
+            borderRadius: "8px",
+            fontFamily: "monospace" 
+          }}>
+            {response.data.paper.citation}
+          </div>
         </div>
       );
   
@@ -112,13 +121,13 @@ const Chat = () => {
     }
   };
   
-  ;  const handleKeyPress = (e) => {
+  const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       searchPaper();
+      setInput("");  // This will clear the input field
     }
   };
-
   return (
     <>
       <Helmet>
