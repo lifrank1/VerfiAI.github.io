@@ -4,7 +4,7 @@
 - [Project Summary](#project-summary)
 - [Installation](#installation)
 - [Technology Stack](#technology-stack)
-- [Access Frontend, Backend, WebScraper Documentation](#Access-Frontend,-Backend,-WebScraper-Documentation)
+- [Access Frontend, Backend, WebScraper Documentation](#access-frontend-backend-webscraper-documentation)
 
 ## Project Summary  
 
