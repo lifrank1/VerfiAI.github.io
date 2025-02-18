@@ -1,7 +1,7 @@
 # VerifAI
 
 ## Table of Contents
-- [Project Summary](#project Summary)
+- [Project Summary](#project-summary)
 - [Installation](#installation)
 - 
 
