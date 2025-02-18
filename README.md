@@ -3,7 +3,7 @@
 ## Table of Contents
 - [Project Summary](#project-summary)
 - [Installation](#installation)
-- 
+- [Technology Stack](technology-stack)
 
 ## Project Summary  
 
@@ -34,3 +34,24 @@
 5) Navigate to the backend folder from the terminal
 6) run 'npm install' to get the dependencies for the backend
 7) run 'node backend/server.js' to start the localhost backend server
+
+## Technology Stack  
+
+### 🔹 Front End  
+- **React.js** – Dynamic and interactive UI  
+- **Bootstrap.js** – Responsive and visually appealing design  
+
+### 🔹 Back End  
+- **Node.js with Express.js** – Handles server-side logic, API endpoints, and database interactions  
+
+### 🔹 Database & Storage  
+- **Firebase** – Manages user authentication and data storage  
+- **AWS S3** – Handles large-scale file uploads  
+
+### 🔹 Web Scraping & AI Processing  
+- **BeautifulSoup** – Extracts citation data from web pages  
+- **Hugging Face AI** – Classifies article genres to suggest relevant citations  
+
+### 🔹 Containerization  
+- **Docker** – Ensures consistent deployment across environments  
+
