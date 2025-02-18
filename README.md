@@ -52,6 +52,6 @@
 - **BeautifulSoup** – Extracts citation data from web pages  
 - **Hugging Face AI** – Classifies article genres to suggest relevant citations  
 
-### 🔹 Containerization  
+### Containerization  
 - **Docker** – Ensures consistent deployment across environments  
 
