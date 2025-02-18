@@ -3,7 +3,7 @@
 ## Table of Contents
 - [Project Summary](#project-summary)
 - [Installation](#installation)
-- [Technology Stack](technology-stack)
+- [Technology Stack](#technology-stack)
 
 ## Project Summary  
 
