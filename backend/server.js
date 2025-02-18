@@ -4,27 +4,8 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { HfInference } = require('@huggingface/inference');
 
-// Debug logging
-console.log("Loading environment from:", path.join(__dirname, ".env"));
-console.log("Environment check:");
-console.log("GEMINI_API_KEY exists:", !!process.env.GEMINI_API_KEY);
-console.log(
-  "GEMINI_API_KEY prefix:",
-  process.env.GEMINI_API_KEY?.substring(0, 6)
-);
-
-// Store the API key in a constant
-const API_KEY = process.env.GEMINI_API_KEY;
-if (!API_KEY) {
-  console.error("FATAL: GEMINI_API_KEY not found in environment");
-  process.exit(1);
-}
-
-const genAI = new GoogleGenerativeAI(API_KEY);
-
-// Rest of your server setup
 const serviceAccount = require("./firebase-adminsdk.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -35,6 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 const db = admin.firestore();
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
 
 // 🔹 API route to create a new user
 app.post("/api/create-user", async (req, res) => {
@@ -86,49 +68,125 @@ app.post("/api/create-user", async (req, res) => {
     });
   }
 });
-// 🔹 API route to send a message to Deepseek
-app.post("/api/chat", async (req, res) => {
+
+// New endpoint to generate citations
+app.post("/api/generate-citation", async (req, res) => {
   try {
-    console.log("Request body:", JSON.stringify(req.body, null, 2));
-    console.log("Messages array:", JSON.stringify(req.body.messages, null, 2));
-    console.log(
-      "Last message:",
-      req.body.messages[req.body.messages.length - 1].content
-    );
-
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-    // Try with just the last message first
-    const lastMessage = req.body.messages[req.body.messages.length - 1].content;
-    console.log("Attempting to generate content with:", lastMessage);
-
-    const result = await model.generateContent(lastMessage);
-    console.log("Generation successful");
-    const response = await result.response;
-    const responseText = response.text();
-    console.log("Response received:", responseText);
+    const { paperTitle, authors, year } = req.body;
+    
+    const input = `generate citation for: ${paperTitle} by ${authors} published in ${year}`;
+    
+    const response = await hf.textGeneration({
+      model: 'scieditor/citation-generation-t5',
+      inputs: input,
+      parameters: {
+        max_length: 512,
+        temperature: 0.7
+      }
+    });
 
     res.json({
-      choices: [
-        {
-          message: {
-            content: responseText,
-          },
-        },
-      ],
+      citation: response.generated_text
     });
   } catch (error) {
-    console.error("Full error details:", {
-      error: error,
-      requestBody: req.body,
-      messageCount: req.body.messages?.length,
-    });
+    console.error("Citation generation error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Start the server
-const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Modified chat endpoint to discuss paper contents
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { message, paperContent } = req.body;
+    
+    const input = `Context: ${paperContent}\nQuestion: ${message}`;
+    
+    const response = await hf.textGeneration({
+      model: 'scieditor/citation-generation-t5',
+      inputs: input,
+      parameters: {
+        max_length: 1024,
+        temperature: 0.8
+      }
+    });
+
+    res.json({
+      reply: response.generated_text
+    });
+  } catch (error) {
+    console.error("Chat error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const port = 3002;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
+
+const multer = require('multer');
+const { spawn } = require('child_process');
+const upload = multer({ dest: 'uploads/' });
+
+app.post('/api/analyze-paper', async (req, res) => {
+  const { doi } = req.body;
+  console.log('Received DOI:', doi); // Log incoming DOI
+  
+  const pythonProcess = spawn('python', ['./backend/scrapers/doi_citation.py', doi]);
+  
+  let data = '';
+  let errorData = '';
+  
+  pythonProcess.stdout.on('data', (chunk) => {
+    data += chunk;
+    console.log('Python output:', chunk.toString()); // Log Python output
+  });
+  
+  pythonProcess.stderr.on('data', (chunk) => {
+    errorData += chunk;
+    console.error('Python error:', chunk.toString()); // Log Python errors
+  });
+  
+  pythonProcess.on('close', (code) => {
+    console.log('Process exited with code:', code); // Log exit code
+    if (code !== 0) {
+      return res.status(500).json({ 
+        error: 'Failed to analyze paper',
+        details: errorData
+      });
+    }
+    try {
+      const result = JSON.parse(data);
+      console.log('Parsed result:', result); // Log parsed result
+      res.json(result);
+    } catch (e) {
+      res.status(500).json({ 
+        error: 'Invalid JSON response',
+        details: e.message
+      });
+    }
+  });
+});app.post("/api/isbn-citation", async (req, res) => {
+  const { isbn } = req.body;
+  
+  try {
+    const pythonProcess = spawn('python', ['./scrapers/isbn_citation.py', isbn]);
+    
+    let data = '';
+    
+    pythonProcess.stdout.on('data', (chunk) => {
+      data += chunk;
+    });
+    
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        return res.status(500).json({ error: 'Failed to process ISBN' });
+      }
+      const results = JSON.parse(data);
+      res.json(results);
+    });
+  } catch (error) {
+    console.error("ISBN processing error:", error);
+    res.status(500).json({ error: error.message });
+  }
 });

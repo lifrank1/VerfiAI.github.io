@@ -9,9 +9,10 @@ const Chat = () => {
   const [messages, setMessages] = useState([
     {
       type: "bot",
-      text: "Hello! I'm VerifAI. How can I assist you today?",
+      text: "Hello! Enter a paper title, DOI, or ISBN to get started.",
     },
   ]);
+  const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
@@ -36,65 +37,93 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (input.trim() === "") return;
-
-    const newUserMessage = { type: "user", text: input };
-    setMessages((prev) => [...prev, newUserMessage]);
-    setInput("");
-
-    try {
-      // Show loading message
-      const loadingMessage = { type: "bot", text: "..." };
-      setMessages((prev) => [...prev, loadingMessage]);
-
-      // Format messages for Gemini
-      const messageHistory = messages.map((msg) => ({
-        role: msg.type === "user" ? "user" : "assistant",
-        content: msg.text,
-      }));
-
-      // Add current message
-      messageHistory.push({
-        role: "user",
-        content: input,
-      });
-
-      // Make API call to your backend
-      const response = await axios.post("http://localhost:3002/api/chat", {
-        messages: messageHistory,
-      });
-
-      // Remove loading message and add AI response
-      setMessages((prev) => prev.slice(0, -1)); // Remove loading message
-      const aiResponse = {
-        type: "bot",
-        text: response.data.choices[0].message.content,
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    } catch (error) {
-      console.error("Error calling Gemini API:", error.response?.data || error);
-      setMessages((prev) => prev.slice(0, -1));
-      const errorMessage = {
-        type: "bot",
-        text: `Error: ${error.response?.data?.error || error.message}`,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    }
+  const isISBN = (input) => {
+    // Basic ISBN validation (both ISBN-10 and ISBN-13)
+    return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ''));
   };
 
-  const handleKeyPress = (e) => {
+  const searchPaper = async () => {
+    if (input.trim() === "") return;
+  
+    if (input.trim().toLowerCase() === "clear") {
+      setMessages([
+        { type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }
+      ]);
+      setInput("");
+      return;
+    }
+  
+    setMessages(prev => [...prev, { type: "user", text: input }]);
+    setIsLoading(true);
+  
+    try {
+      const response = await axios.post("http://localhost:3002/api/analyze-paper", {
+        doi: input
+      });
+  
+      const { is_retracted, retraction_info, title, authors, research_field, year, doi } = response.data.paper;
+  
+      let retractionNotice;
+      if (is_retracted) {
+        retractionNotice = (
+          <div>
+            <p style={{ color: "red", fontWeight: "bold" }}>🚨 This paper may be retracted!</p>
+            <ul style={{ paddingLeft: "2rem" }}>
+              {retraction_info.map((item, idx) => (
+                <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                  <b>📌 Title:</b> {item.title}<br />
+                  <b>🔗 DOI:</b> {item.doi}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      } else {
+        retractionNotice = <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>;
+      }
+  
+      const formattedMessage = (
+        <div>
+          <h3>Paper Details</h3>
+          <p><b>📌 Title:</b> {title}</p>
+          <p><b>👥 Authors:</b></p>
+          <ul style={{ paddingLeft: "2rem" }}>
+            {authors.map((author, index) => (
+              <li key={index} style={{ marginBottom: "0.3rem" }}>{author}</li>
+            ))}
+          </ul>
+          <p><b>📊 Research Field:</b> {research_field.field}</p>
+          <p><b>📅 Year:</b> {year}</p>
+          <p><b>🔗 DOI:</b> {doi}</p>
+          {retractionNotice}
+        </div>
+      );
+  
+      setMessages(prev => [...prev, { type: "bot", text: formattedMessage }]);
+  
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        type: "bot",
+        text: "Error analyzing paper. Please check the DOI and try again."
+      }]);
+    } finally {
+      setIsLoading(false);
+      setInput("");
+    }
+  };
+  
+  ;  const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      searchPaper();
     }
   };
 
   return (
     <>
       <Helmet>
-        <title>Chat - VerifAI</title>
-        <meta name="description" content="Chat with VerifAI" />
+        <title>Research Paper Validator - VerifAI</title>
+        <meta name="description" content="Validate and cite research papers" />
         <style>
           {`
             body {
@@ -104,20 +133,22 @@ const Chat = () => {
               height: 100vh;
               font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             }
+            @keyframes loading {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(400%); }
+            }
           `}
         </style>
       </Helmet>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100vh",
-          maxWidth: "1000px",
-          margin: "0 auto",
-          background: "white",
-          boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-        }}
-      >
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        maxWidth: "1000px",
+        margin: "0 auto",
+        background: "white",
+        boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+      }}>
         <div
           style={{
             padding: "1rem",
@@ -164,83 +195,86 @@ const Chat = () => {
             Logout
           </button>
         </div>
-
-        <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "1rem",
-            display: "flex",
-            flexDirection: "column",
-            gap: "1rem",
-          }}
-          ref={messagesEndRef}
-        >
+        <div style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "1rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+        }} ref={messagesEndRef}>
           {messages.map((message, index) => (
-            <div
-              key={index}
-              style={{
-                display: "flex",
-                justifyContent:
-                  message.type === "user" ? "flex-end" : "flex-start",
-                padding: "0.5rem 1rem",
-              }}
-            >
-              <div
-                style={{
-                  maxWidth: "80%",
-                  padding: "1rem",
-                  borderRadius: "12px",
-                  background: message.type === "user" ? "#6E44FF" : "#f7f7f8",
-                  color: message.type === "user" ? "white" : "#333",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                }}
-              >
+            <div key={index} style={{
+              display: "flex",
+              justifyContent: message.type === "user" ? "flex-end" : "flex-start",
+              padding: "0.5rem 1rem",
+            }}>
+              <div style={{
+                maxWidth: "80%",
+                padding: "1rem",
+                borderRadius: "12px",
+                background: message.type === "user" ? "#6E44FF" : "#f7f7f8",
+                color: message.type === "user" ? "white" : "#333",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+              }}>
                 {message.text}
               </div>
             </div>
           ))}
+          
+          {isLoading && (
+            <div style={{
+              padding: "1rem",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center"
+            }}>
+              <div style={{
+                width: "80%",
+                height: "4px",
+                background: "#f0f0f0",
+                borderRadius: "2px",
+                overflow: "hidden"
+              }}>
+                <div style={{
+                  width: "30%",
+                  height: "100%",
+                  background: "#6E44FF",
+                  animation: "loading 1s infinite linear",
+                  borderRadius: "2px"
+                }}/>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div
-          style={{
-            padding: "1rem",
-            borderTop: "1px solid #e5e5e5",
-            background: "white",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              maxWidth: "800px",
-              margin: "0 auto",
-            }}
-          >
-            <textarea
+        <div style={{
+          padding: "1rem",
+          borderTop: "1px solid #e5e5e5",
+          background: "white",
+        }}>
+          <div style={{
+            display: "flex",
+            gap: "0.5rem",
+            maxWidth: "800px",
+            margin: "0 auto",
+          }}>
+            <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message here..."
+              placeholder="Enter paper title, DOI, or ISBN..."
               style={{
                 flex: 1,
                 padding: "0.75rem",
                 borderRadius: "8px",
                 border: "1px solid #e5e5e5",
-                resize: "none",
-                minHeight: "20px",
-                maxHeight: "200px",
-                fontFamily: "inherit",
                 fontSize: "1rem",
                 outline: "none",
-                ":focus": {
-                  borderColor: "#6E44FF",
-                },
               }}
-              rows={1}
             />
             <button
-              onClick={sendMessage}
+              onClick={searchPaper}
               style={{
                 background: "#FF4D4D",
                 color: "white",
@@ -250,12 +284,9 @@ const Chat = () => {
                 cursor: "pointer",
                 fontSize: "1rem",
                 transition: "background-color 0.3s ease",
-                ":hover": {
-                  backgroundColor: "#FF1A1A",
-                },
               }}
             >
-              Send
+              Search
             </button>
           </div>
         </div>
