@@ -22,9 +22,9 @@
 - **Academic Integrity Support** – A comprehensive tool for students, researchers, and journal editors  
 
 ### Potential Use Cases  
- **Graduate Students** – Easily verify bibliography accuracy for theses and dissertations  
- **Academic Researchers** – Ensure research papers meet citation standards before submission  
- **Professors & Instructors** – Cross-check references in student work for accuracy  
+- **Graduate Students** – Easily verify bibliography accuracy for theses and dissertations  
+- **Academic Researchers** – Ensure research papers meet citation standards before submission  
+- **Professors & Instructors** – Cross-check references in student work for accuracy  
 
 
 ## Installation
