@@ -23,10 +23,6 @@ This is the frontend service for **VerifAI**, built with **React.js** and utiliz
    npm start
    \`\`\`
 
-## 📡 API Endpoints
-- \`POST /api/create-user\`: Creates a new user
-- \`POST /api/chat\`: Sends a message to the AI model
-
 ## 📜 Dependencies
 - React (v17+)
 - Firebase
