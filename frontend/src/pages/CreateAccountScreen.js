@@ -1,29 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../styles/LoginScreen.css';
+import '../styles/LoginScreen.css';  // Ensure this import is at the top
 
 function CreateAccount() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState(''); // Added confirm password state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [passwordMismatchError, setPasswordMismatchError] = useState('');
+  const [passwordMismatchError, setPasswordMismatchError] = useState(''); // Error for password mismatch
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (isSubmitting) return;
-    
+
+    // Check if passwords match
     if (password !== confirmPassword) {
       setPasswordMismatchError("Passwords do not match.");
-      return;
+      return; // Prevent form submission if passwords don't match
     }
-
-    setIsSubmitting(true);
 
     try {
       const response = await fetch('http://localhost:3002/api/create-user', {
@@ -36,14 +32,12 @@ function CreateAccount() {
       
       if (data.success) {
         console.log('User created:', data);
-        navigate('/');
+        navigate('/');  // Redirect to home screen
       } else {
         setError(data.message || 'Failed to create account');
-        setIsSubmitting(false);
       }
     } catch (error) {
       setError('Error: ' + error.message);
-      setIsSubmitting(false);
     }
   };
 
@@ -52,7 +46,7 @@ function CreateAccount() {
       <div className="login-section">
         <h2>Create an Account</h2>
         {error && <p className="error-message">{error}</p>}
-        {passwordMismatchError && <p className="error-message">{passwordMismatchError}</p>}
+        {passwordMismatchError && <p className="error-message">{passwordMismatchError}</p>} {/* Display password mismatch error */}
         <form onSubmit={handleSubmit}>
           <input
             type="text"
@@ -88,25 +82,17 @@ function CreateAccount() {
           />
           <input
             type="password"
-            placeholder="Confirm Password"
+            placeholder="Confirm Password" // Added confirm password input
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             className="input-field"
             required
           />
-          <button 
-            type="submit" 
-            className="login-button" 
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Creating Account...' : 'Create Account'}
+          <button type="submit" className="login-button">
+            Create Account
           </button>
         </form>
-        <button 
-          className="back-button" 
-          onClick={() => navigate('/')} 
-          disabled={isSubmitting}
-        >
+        <button className="back-button" onClick={() => navigate('/')}>
           Go Back
         </button>
       </div>
