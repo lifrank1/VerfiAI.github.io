@@ -6,12 +6,9 @@
     "frontend"
   ],
   "scripts": {
-    "start": "cd frontend && npm start",
-    "build": "cd frontend && npm build",
-    "test": "cd frontend && npm test",
-    "eject": "cd frontend && npm eject",
-    "lint": "eslint .",
-    "format": "prettier --write ."
+    "start": "concurrently \"npm run frontend\" \"npm run backend\"",
+    "frontend": "cd frontend && npm start",
+    "backend": "node backend/server.js"
   },
   "eslintConfig": {
     "extends": [
@@ -27,9 +24,12 @@
     "express": "^4.21.2",
     "firebase": "^11.2.0",
     "firebase-admin": "^13.0.2",
+    "multer": "^1.4.5-lts.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.1.5"
+    "react-router-dom": "^7.1.5",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
