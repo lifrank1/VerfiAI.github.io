@@ -7,81 +7,166 @@ info:
 servers:
   - url: http://localhost:3002
     description: Local development server
-  - url: http://localhost:3000
-    description: Local server hosting the OpenAPI spec
 
-components:
-  securitySchemes:
-    apiKeyAuth:
-      type: apiKey
-      in: header
-      name: GEMINI_API_KEY
-
-  parameters:
-    GEMINI_API_KEY:
-      name: GEMINI_API_KEY
-      in: header
-      required: true
-      schema:
-        type: string
-      description: API Key for Gemini service
-    DOI_PARAM:
-      name: doi
-      in: query
-      required: true
-      schema:
-        type: string
-        description: DOI of the paper
-    TITLE_PARAM:
-      name: title
-      in: query
-      required: true
-      schema:
-        type: string
-        description: Title of the paper
-
-  schemas:
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: string
-          description: Error message
-    PaperInfo:
-      type: object
-      properties:
-        title:
-          type: string
-        authors:
-          type: array
-          items:
-            type: string
-        year:
-          type: string
-        doi:
-          type: string
-        abstract:
-          type: string
-        research_field:
-          type: object
-          properties:
-            field:
-              type: string
-            confidence:
-              type: number
-        is_retracted:
-          type: boolean
-        retraction_info:
-          type: array
-          items:
-            type: object
-            properties:
-              title:
-                type: string
-              doi:
-                type: string
+tags:
+  - name: Users
+    description: User management endpoints
+  - name: Papers
+    description: Paper analysis and management
+  - name: Citations
+    description: Citation generation and management
+  - name: Chat
+    description: AI chat interactions
 
 paths:
+  # User Management
+  /api/users/{uid}:
+    get:
+      tags: [Users]
+      summary: Get user details
+    put:
+      tags: [Users]
+      summary: Update user details
+    delete:
+      tags: [Users]
+      summary: Delete user account
+
+  /api/create-user:
+    post:
+      tags: [Users]
+      summary: Create new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+      responses:
+        '200':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  uid:
+                    type: string
+        '400':
+          description: Error creating user
+
+  # Paper Management
+  /api/papers/{doi}:
+    get:
+      tags: [Papers]
+      summary: Get paper details
+    put:
+      tags: [Papers]
+      summary: Update paper details
+    delete:
+      tags: [Papers]
+      summary: Delete paper record
+
+  /api/analyze-paper:
+    post:
+      tags: [Papers]
+      summary: Analyze paper using DOI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                doi:
+                  type: string
+      responses:
+        '200':
+          description: Paper analysis results
+
+  # Citation Management
+  /api/generate-citation:
+    post:
+      tags: [Citations]
+      summary: Generate citation for paper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paperTitle:
+                  type: string
+                authors:
+                  type: string
+                year:
+                  type: string
+      responses:
+        '200':
+          description: Citation generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  citation:
+                    type: string
+
+  /api/isbn-citation:
+    post:
+      tags: [Citations]
+      summary: Get citation from ISBN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isbn:
+                  type: string
+      responses:
+        '200':
+          description: ISBN citation results
+
+  # Chat Interface
+  /api/chat:
+    post:
+      tags: [Chat]
+      summary: Chat about paper contents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                paperContent:
+                  type: string
+      responses:
+        '200':
+          description: Chat response received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+
   /api/v1/gemini:
     get:
       summary: Get Gemini Model Info
@@ -225,14 +310,207 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-tags:
-  - name: Gemini
-    description: Endpoints related to Gemini AI model
-  - name: Firebase
-    description: Endpoints related to Firebase configuration
-  - name: CrossRef
-    description: Endpoints related to the CrossRef API
-  - name: HuggingFace
-    description: Endpoints related to HuggingFace model-based classification
-  - name: Retraction
-    description: Endpoints related to paper retraction checks
+  /api/v1/search/semantic-scholar:
+    get:
+      summary: Search Semantic Scholar
+      description: Search for papers in Semantic Scholar database
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query for papers
+      responses:
+        '200':
+          description: Successfully retrieved papers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    link:
+                      type: string
+
+  /api/v1/search/arxiv:
+    get:
+      summary: Search ArXiv
+      description: Search for papers in ArXiv database
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query for papers
+      responses:
+        '200':
+          description: Successfully retrieved papers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    link:
+                      type: string
+
+  /api/v1/citation/isbn:
+    get:
+      summary: Get Book Details by ISBN
+      description: Retrieve book information using ISBN
+      parameters:
+        - name: isbn
+          in: query
+          required: true
+          schema:
+            type: string
+          description: ISBN of the book
+      responses:
+        '200':
+          description: Successfully retrieved book details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  authors:
+                    type: array
+                    items:
+                      type: string
+                  publish_date:
+                    type: string
+                  publisher:
+                    type: string
+                  success:
+                    type: boolean
+
+  /api/v1/citation/doi:
+    get:
+      summary: Get Paper Details by DOI
+      description: Retrieve paper information and check retraction status using DOI
+      parameters:
+        - name: doi
+          in: query
+          required: true
+          schema:
+            type: string
+          description: DOI of the paper
+      responses:
+        '200':
+          description: Successfully retrieved paper details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  paper:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      authors:
+                        type: array
+                        items:
+                          type: string
+                      year:
+                        type: string
+                      doi:
+                        type: string
+                      abstract:
+                        type: string
+                      research_field:
+                        type: object
+                      is_retracted:
+                        type: boolean
+                      retraction_info:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            title:
+                              type: string
+                            doi:
+                              type: string
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: GEMINI_API_KEY
+
+  parameters:
+    GEMINI_API_KEY:
+      name: GEMINI_API_KEY
+      in: header
+      required: true
+      schema:
+        type: string
+      description: API Key for Gemini service
+    DOI_PARAM:
+      name: doi
+      in: query
+      required: true
+      schema:
+        type: string
+        description: DOI of the paper
+    TITLE_PARAM:
+      name: title
+      in: query
+      required: true
+      schema:
+        type: string
+        description: Title of the paper
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+    PaperInfo:
+      type: object
+      properties:
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        year:
+          type: string
+        doi:
+          type: string
+        abstract:
+          type: string
+        research_field:
+          type: object
+          properties:
+            field:
+              type: string
+            confidence:
+              type: number
+        is_retracted:
+          type: boolean
+        retraction_info:
+          type: array
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              doi:
+                type: string

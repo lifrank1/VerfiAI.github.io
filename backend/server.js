@@ -190,3 +190,79 @@ app.post('/api/analyze-paper', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// GET endpoints
+app.get("/api/users/:uid", async (req, res) => {
+  try {
+    const userDoc = await db.collection("users").doc(req.params.uid).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(userDoc.data());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/papers/:doi", async (req, res) => {
+  try {
+    const paperDoc = await db.collection("papers").doc(req.params.doi).get();
+    if (!paperDoc.exists) {
+      return res.status(404).json({ error: "Paper not found" });
+    }
+    res.json(paperDoc.data());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT endpoints
+app.put("/api/users/:uid", async (req, res) => {
+  try {
+    const { firstName, lastName, email } = req.body;
+    await db.collection("users").doc(req.params.uid).update({
+      firstName,
+      lastName,
+      email,
+      updatedAt: new Date()
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/api/papers/:doi", async (req, res) => {
+  try {
+    const { title, authors, year } = req.body;
+    await db.collection("papers").doc(req.params.doi).update({
+      title,
+      authors,
+      year,
+      updatedAt: new Date()
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE endpoints
+app.delete("/api/users/:uid", async (req, res) => {
+  try {
+    await admin.auth().deleteUser(req.params.uid);
+    await db.collection("users").doc(req.params.uid).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete("/api/papers/:doi", async (req, res) => {
+  try {
+    await db.collection("papers").doc(req.params.doi).delete();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});

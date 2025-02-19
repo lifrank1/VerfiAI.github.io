@@ -55,12 +55,18 @@ def classify_research_field(paper_info):
     
     # Define the research fields this model classifies into
     fields = [
-        "Machine Learning Algorithms", 
-        "Natural Language Processing", 
+        "Natural Language Processing",
         "Computer Vision and Image Processing", 
-        "Robotics and Autonomous Systems", 
+        "Robotics and Autonomous Systems",
+        "Machine Learning",
+        "Deep Learning",
+        "Cybersecurity",
+        "Data Mining",
+        "Cloud Computing",
+        "Internet of Things",
         "Other"
     ]
+
     
     return {
         'field': fields[predicted_class],
