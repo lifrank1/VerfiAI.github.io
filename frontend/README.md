@@ -10,7 +10,7 @@ This is the frontend service for **VerifAI**, built with **React.js** and utiliz
 1. Clone this repository:
    \`\`\`bash
    git clone <https://github.com/ShashankRaghuraj/VerfiAI.git>
-   cd verifai-backend
+   cd verifai-frontend
    \`\`\`
 
 2. Install dependencies:
