@@ -1,6 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import '../styles/HomeScreen.css';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import "../styles/HomeScreen.css";
+import logo from '../assets/verifaiLogo.png';
+
+
+const NavigationHeader = () => {
+  return (
+    <header className="nav-header">
+      <div className="nav-container">
+        <div className="logo">
+          <Link to="/">
+            <img src={logo} alt="Logo" className="logo-img" />
+          </Link>
+        </div>
+        <nav className="nav-links">
+          <Link to="/">Home</Link>
+          <Link to="/about">About</Link>
+          <Link to="/features">Features</Link>
+          <Link to="/contact">Contact</Link>
+        </nav>
+      </div>
+      <div className="nav-buttons">
+        <div className="login-button-container">
+          <Link to="/LoginScreen">
+            <button className="login-button">Log In</button> 
+          </Link>
+        </div>
+        <div className="create-account-button-container">
+          <Link to="/create-account">
+            <button className="create-account-button">Create Account</button>
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+
+
 
 const WordAnimation = () => {
   const [activeWord, setActiveWord] = useState(0);
@@ -38,6 +75,7 @@ const HomeScreen = () => {
 
   return (
     <div className="page-container">
+      <NavigationHeader />
       <div className="hero-section">
         <div className="container text-center">
           <h1 className="app-name">VerifAI</h1>
@@ -47,7 +85,7 @@ const HomeScreen = () => {
             <span className="highlight-word">ensure</span>academic integrity.
           </p>
           <Link to="/LoginScreen">
-          <button className="login-button">Log In</button>
+            <button className="login-button">Log In</button>
           </Link>
           <div className="scroll-indicator" onClick={scrollToNextSection}>
             <svg width="24" height="24" viewBox="0 0 24 24">
