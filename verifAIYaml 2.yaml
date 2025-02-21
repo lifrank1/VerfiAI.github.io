@@ -51,7 +51,7 @@ paths:
                 lastName:
                   type: string
       responses:
-        '200':
+        "200":
           description: User created successfully
           content:
             application/json:
@@ -62,7 +62,7 @@ paths:
                     type: boolean
                   uid:
                     type: string
-        '400':
+        "400":
           description: Error creating user
 
   # Paper Management
@@ -91,7 +91,7 @@ paths:
                 doi:
                   type: string
       responses:
-        '200':
+        "200":
           description: Paper analysis results
 
   # Citation Management
@@ -113,7 +113,7 @@ paths:
                 year:
                   type: string
       responses:
-        '200':
+        "200":
           description: Citation generated successfully
           content:
             application/json:
@@ -137,7 +137,7 @@ paths:
                 isbn:
                   type: string
       responses:
-        '200':
+        "200":
           description: ISBN citation results
 
   # Chat Interface
@@ -157,7 +157,7 @@ paths:
                 paperContent:
                   type: string
       responses:
-        '200':
+        "200":
           description: Chat response received
           content:
             application/json:
@@ -174,9 +174,9 @@ paths:
       security:
         - apiKeyAuth: []
       parameters:
-        - $ref: '#/components/parameters/GEMINI_API_KEY'
+        - $ref: "#/components/parameters/GEMINI_API_KEY"
       responses:
-        '200':
+        "200":
           description: Successfully retrieved Gemini model info
           content:
             application/json:
@@ -188,19 +188,19 @@ paths:
                   provider:
                     type: string
                     example: google
-        '401':
+        "401":
           description: Unauthorized - Invalid API Key
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/firebase:
     get:
       summary: Get Firebase Configuration
       description: Retrieves Firebase configuration details.
       responses:
-        '200':
+        "200":
           description: Successfully retrieved Firebase config
           content:
             application/json:
@@ -213,73 +213,73 @@ paths:
                   config_file:
                     type: string
                     example: firebase-adminsdk.json
-        '500':
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/crossref:
     get:
       summary: Retrieve Paper Info from Crossref
       description: Returns paper details by querying the Crossref API using a DOI.
       parameters:
-        - $ref: '#/components/parameters/DOI_PARAM'
+        - $ref: "#/components/parameters/DOI_PARAM"
       responses:
-        '200':
+        "200":
           description: Successfully retrieved paper info
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaperInfo'
-        '400':
+                $ref: "#/components/schemas/PaperInfo"
+        "400":
           description: Bad Request - Missing or invalid DOI
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/huggingface:
     get:
       summary: Classify Research Field using HuggingFace
       description: Classifies the research field of a paper using its title and abstract (if available).
       parameters:
-        - $ref: '#/components/parameters/DOI_PARAM'
+        - $ref: "#/components/parameters/DOI_PARAM"
       responses:
-        '200':
+        "200":
           description: Successfully classified the paper's research field
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaperInfo'
-        '400':
+                $ref: "#/components/schemas/PaperInfo"
+        "400":
           description: Bad Request - Missing or invalid DOI
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/retraction:
     get:
       summary: Check Retraction Status of a Paper
       description: Checks if a paper (using its title) has been retracted according to CrossRef.
       parameters:
-        - $ref: '#/components/parameters/TITLE_PARAM'
+        - $ref: "#/components/parameters/TITLE_PARAM"
       responses:
-        '200':
+        "200":
           description: Successfully retrieved retraction information
           content:
             application/json:
@@ -297,18 +297,18 @@ paths:
                           type: string
                         doi:
                           type: string
-        '400':
+        "400":
           description: Bad Request - Missing or invalid title
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/search/semantic-scholar:
     get:
@@ -322,7 +322,7 @@ paths:
             type: string
           description: Search query for papers
       responses:
-        '200':
+        "200":
           description: Successfully retrieved papers
           content:
             application/json:
@@ -348,7 +348,7 @@ paths:
             type: string
           description: Search query for papers
       responses:
-        '200':
+        "200":
           description: Successfully retrieved papers
           content:
             application/json:
@@ -374,7 +374,7 @@ paths:
             type: string
           description: ISBN of the book
       responses:
-        '200':
+        "200":
           description: Successfully retrieved book details
           content:
             application/json:
@@ -406,7 +406,7 @@ paths:
             type: string
           description: DOI of the paper
       responses:
-        '200':
+        "200":
           description: Successfully retrieved paper details
           content:
             application/json:
@@ -444,12 +444,82 @@ paths:
                             doi:
                               type: string
 
+  # Authentication Endpoints
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: User logout
+      responses:
+        "200":
+          description: Logout successful
+
+  # Chat Endpoints
+  /api/chat/history:
+    get:
+      tags: [Chat]
+      summary: Get chat history
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chat history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+
 components:
   securitySchemes:
     apiKeyAuth:
       type: apiKey
       in: header
       name: GEMINI_API_KEY
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
   parameters:
     GEMINI_API_KEY:
@@ -552,3 +622,71 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+
+    SearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        year:
+          type: string
+        doi:
+          type: string
+        abstract:
+          type: string
+        source:
+          type: string
+          enum: [arxiv, semantic-scholar, crossref]
+        url:
+          type: string
+
+    BookInfo:
+      type: object
+      properties:
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        publisher:
+          type: string
+        publishDate:
+          type: string
+        isbn:
+          type: string
+        edition:
+          type: string
+        language:
+          type: string
+        pageCount:
+          type: integer
+
+    RetractionInfo:
+      type: object
+      properties:
+        is_retracted:
+          type: boolean
+        retraction_date:
+          type: string
+          format: date
+        retraction_reason:
+          type: string
+        retraction_source:
+          type: string
+        retraction_doi:
+          type: string
