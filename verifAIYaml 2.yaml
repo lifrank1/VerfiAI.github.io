@@ -481,36 +481,74 @@ components:
         error:
           type: string
           description: Error message
+        success:
+          type: boolean
+          description: Operation success status
+        message:
+          type: string
+          description: Detailed error message
+
     PaperInfo:
       type: object
       properties:
-        title:
-          type: string
-        authors:
-          type: array
-          items:
-            type: string
-        year:
-          type: string
-        doi:
-          type: string
-        abstract:
-          type: string
-        research_field:
+        success:
+          type: boolean
+        paper:
           type: object
           properties:
-            field:
+            title:
               type: string
-            confidence:
-              type: number
-        is_retracted:
-          type: boolean
-        retraction_info:
-          type: array
-          items:
-            type: object
-            properties:
-              title:
+            authors:
+              type: array
+              items:
                 type: string
-              doi:
-                type: string
+            year:
+              type: string
+            doi:
+              type: string
+            abstract:
+              type: string
+            research_field:
+              type: object
+              properties:
+                field:
+                  type: string
+                confidence:
+                  type: number
+            is_retracted:
+              type: boolean
+            retraction_info:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  doi:
+                    type: string
+            citation:
+              type: string
+
+    ChatMessage:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [user, bot]
+          description: Type of message sender
+        text:
+          type: string
+          description: Message content
+
+    UserProfile:
+      type: object
+      properties:
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
