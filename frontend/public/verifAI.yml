@@ -1,18 +1,237 @@
 openapi: 3.1.0
 info:
   title: VerifAI API
-  description: An AI Verification System for managing Gemini AI models and Firebase configurations.
+  description: AI Verification System
   version: 1.0.0
-  contact:
-    name: VerifAI Team
-    email: support@verifai.com
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
 
 servers:
   - url: http://localhost:3002
     description: Local development server
+
+tags:
+  - name: Users
+    description: User management endpoints
+  - name: Papers
+    description: Paper analysis and management
+  - name: Citations
+    description: Citation generation and management
+  - name: Chat
+    description: AI chat interactions
+
+paths:
+  # User Management
+  /api/users/{uid}:
+    get:
+      tags: [Users]
+      summary: Get user details
+    put:
+      tags: [Users]
+      summary: Update user details
+    delete:
+      tags: [Users]
+      summary: Delete user account
+
+  /api/create-user:
+    post:
+      tags: [Users]
+      summary: Create new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+      responses:
+        "200":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  uid:
+                    type: string
+        "400":
+          description: Error creating user
+
+  # Paper Management
+  /api/papers/{doi}:
+    get:
+      tags: [Papers]
+      summary: Get paper details
+    put:
+      tags: [Papers]
+      summary: Update paper details
+    delete:
+      tags: [Papers]
+      summary: Delete paper record
+
+  /api/analyze-paper:
+    post:
+      tags: [Papers]
+      summary: Analyze paper using DOI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                doi:
+                  type: string
+      responses:
+        "200":
+          description: Paper analysis results
+
+  # Citation Management
+  /api/generate-citation:
+    post:
+      tags: [Citations]
+      summary: Generate citation for paper
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paperTitle:
+                  type: string
+                authors:
+                  type: string
+                year:
+                  type: string
+      responses:
+        "200":
+          description: Citation generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  citation:
+                    type: string
+
+  /api/isbn-citation:
+    post:
+      tags: [Citations]
+      summary: Get citation from ISBN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isbn:
+                  type: string
+      responses:
+        "200":
+          description: ISBN citation results
+
+  # Chat Interface
+  /api/chat:
+    post:
+      tags: [Chat]
+      summary: Chat about paper contents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                paperContent:
+                  type: string
+      responses:
+        "200":
+          description: Chat response received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+
+  # Authentication Endpoints
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: User logout
+      responses:
+        "200":
+          description: Logout successful
+
+  # Chat Endpoints
+  /api/chat/history:
+    get:
+      tags: [Chat]
+      summary: Get chat history
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chat history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
 
 components:
   securitySchemes:
@@ -20,6 +239,10 @@ components:
       type: apiKey
       in: header
       name: GEMINI_API_KEY
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
   parameters:
     GEMINI_API_KEY:
@@ -28,8 +251,21 @@ components:
       required: true
       schema:
         type: string
-        example: "your-gemini-api-key"
-      description: API Key required to access Gemini endpoints
+      description: API Key for Gemini service
+    DOI_PARAM:
+      name: doi
+      in: query
+      required: true
+      schema:
+        type: string
+        description: DOI of the paper
+    TITLE_PARAM:
+      name: title
+      in: query
+      required: true
+      schema:
+        type: string
+        description: Title of the paper
 
   schemas:
     ErrorResponse:
@@ -37,188 +273,143 @@ components:
       properties:
         error:
           type: string
-          description: Error message describing what went wrong
-        code:
-          type: integer
-          description: HTTP status code
-      required:
-        - error
-        - code
-      example:
-        error: "Unauthorized - Invalid API Key"
-        code: 401
+          description: Error message
+        success:
+          type: boolean
+          description: Operation success status
+        message:
+          type: string
+          description: Detailed error message
 
-    GeminiModel:
+    PaperInfo:
       type: object
       properties:
-        model:
-          type: string
-          description: Name of the Gemini model
-          example: gemini-pro
-        provider:
-          type: string
-          description: Provider of the AI model
-          example: google
-      required:
-        - model
-        - provider
+        success:
+          type: boolean
+        paper:
+          type: object
+          properties:
+            title:
+              type: string
+            authors:
+              type: array
+              items:
+                type: string
+            year:
+              type: string
+            doi:
+              type: string
+            abstract:
+              type: string
+            research_field:
+              type: object
+              properties:
+                field:
+                  type: string
+                confidence:
+                  type: number
+            is_retracted:
+              type: boolean
+            retraction_info:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  doi:
+                    type: string
+            citation:
+              type: string
 
-    FirebaseConfig:
+    ChatMessage:
       type: object
       properties:
         type:
           type: string
-          description: Type of Firebase service
-          example: firestore
-        config_file:
+          enum: [user, bot]
+          description: Type of message sender
+        text:
           type: string
-          description: Path to the Firebase configuration file
-          example: firebase-adminsdk.json
-      required:
-        - type
-        - config_file
+          description: Message content
 
-paths:
-  /api/v1/gemini:
-    get:
-      tags:
-        - Gemini
-      summary: Get Gemini Model Info
-      description: Retrieves information about the Gemini model.
-      security:
-        - apiKeyAuth: []
-      parameters:
-        - $ref: '#/components/parameters/GEMINI_API_KEY'
-      responses:
-        '200':
-          description: Successfully retrieved Gemini model info
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GeminiModel'
-        '401':
-          description: Unauthorized - Invalid API Key
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+    UserProfile:
+      type: object
+      properties:
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
-    post:
-      tags:
-        - Gemini
-      summary: Create Gemini Model
-      description: Creates a new Gemini model configuration.
-      security:
-        - apiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GeminiModel'
-      responses:
-        '201':
-          description: Gemini model created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GeminiModel'
-        '400':
-          description: Bad Request - Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
 
-  /api/v1/firebase:
-    get:
-      tags:
-        - Firebase
-      summary: Get Firebase Configuration
-      description: Retrieves Firebase configuration details.
-      responses:
-        '200':
-          description: Successfully retrieved Firebase config
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FirebaseConfig'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+    SearchResult:
+      type: object
+      properties:
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        year:
+          type: string
+        doi:
+          type: string
+        abstract:
+          type: string
+        source:
+          type: string
+          enum: [arxiv, semantic-scholar, crossref]
+        url:
+          type: string
 
-    post:
-      tags:
-        - Firebase
-      summary: Create Firebase Configuration
-      description: Creates a new Firebase configuration.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FirebaseConfig'
-      responses:
-        '201':
-          description: Firebase configuration created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FirebaseConfig'
-        '400':
-          description: Bad Request - Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+    BookInfo:
+      type: object
+      properties:
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        publisher:
+          type: string
+        publishDate:
+          type: string
+        isbn:
+          type: string
+        edition:
+          type: string
+        language:
+          type: string
+        pageCount:
+          type: integer
 
-tags:
-  - name: Gemini
-    description: Endpoints related to Gemini AI model
-  - name: Firebase
-    description: Endpoints related to Firebase configuration
+    RetractionInfo:
+      type: object
+      properties:
+        is_retracted:
+          type: boolean
+        retraction_date:
+          type: string
+          format: date
+        retraction_reason:
+          type: string
+        retraction_source:
+          type: string
+        retraction_doi:
+          type: string
