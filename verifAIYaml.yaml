@@ -17,19 +17,80 @@ tags:
     description: Citation generation and management
   - name: Chat
     description: AI chat interactions
+  - name: Auth
+    description: Authentication endpoints
 
 paths:
-  # User Management
   /api/users/{uid}:
     get:
       tags: [Users]
       summary: Get user details
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       tags: [Users]
       summary: Update user details
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserProfile"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags: [Users]
       summary: Delete user account
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
 
   /api/create-user:
     post:
@@ -64,18 +125,93 @@ paths:
                     type: string
         "400":
           description: Error creating user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  # Paper Management
   /api/papers/{doi}:
     get:
       tags: [Papers]
       summary: Get paper details
+      parameters:
+        - name: doi
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paper details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperInfo"
+        "404":
+          description: Paper not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       tags: [Papers]
       summary: Update paper details
+      parameters:
+        - name: doi
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                authors:
+                  type: array
+                  items:
+                    type: string
+                year:
+                  type: string
+      responses:
+        "200":
+          description: Paper updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        "404":
+          description: Paper not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags: [Papers]
       summary: Delete paper record
+      parameters:
+        - name: doi
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paper deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
 
   /api/analyze-paper:
     post:
@@ -93,8 +229,17 @@ paths:
       responses:
         "200":
           description: Paper analysis results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperInfo"
+        "500":
+          description: Error analyzing paper
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  # Citation Management
   /api/generate-citation:
     post:
       tags: [Citations]
@@ -122,6 +267,12 @@ paths:
                 properties:
                   citation:
                     type: string
+        "500":
+          description: Error generating citation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/isbn-citation:
     post:
@@ -139,8 +290,17 @@ paths:
       responses:
         "200":
           description: ISBN citation results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookInfo"
+        "404":
+          description: Book not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  # Chat Interface
   /api/chat:
     post:
       tags: [Chat]
@@ -166,8 +326,39 @@ paths:
                 properties:
                   reply:
                     type: string
+        "500":
+          description: Error in chat
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  # Authentication Endpoints
+  /api/chat/history:
+    get:
+      tags: [Chat]
+      summary: Get chat history
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chat history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+        "404":
+          description: No chat history found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/auth/login:
     post:
       tags: [Auth]
@@ -189,14 +380,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  token:
-                    type: string
-                  user:
-                    $ref: "#/components/schemas/UserProfile"
+                $ref: "#/components/schemas/AuthResponse"
         "401":
           description: Invalid credentials
           content:
@@ -211,27 +395,13 @@ paths:
       responses:
         "200":
           description: Logout successful
-
-  # Chat Endpoints
-  /api/chat/history:
-    get:
-      tags: [Chat]
-      summary: Get chat history
-      parameters:
-        - name: userId
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Chat history retrieved
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ChatMessage"
+                type: object
+                properties:
+                  success:
+                    type: boolean
 
 components:
   securitySchemes:
@@ -243,29 +413,6 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-
-  parameters:
-    GEMINI_API_KEY:
-      name: GEMINI_API_KEY
-      in: header
-      required: true
-      schema:
-        type: string
-      description: API Key for Gemini service
-    DOI_PARAM:
-      name: doi
-      in: query
-      required: true
-      schema:
-        type: string
-        description: DOI of the paper
-    TITLE_PARAM:
-      name: title
-      in: query
-      required: true
-      schema:
-        type: string
-        description: Title of the paper
 
   schemas:
     ErrorResponse:
@@ -413,3 +560,7 @@ components:
           type: string
         retraction_doi:
           type: string
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
