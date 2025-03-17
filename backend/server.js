@@ -41,6 +41,7 @@ app.post("/api/create-user", async (req, res) => {
           password,
         });
 
+        
         // Store additional user details in Firestore
         await db.collection("users").doc(userRecord.uid).set({
           firstName,

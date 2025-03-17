@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { getAuth, signOut } from "firebase/auth";
 import { firebaseApp } from "../firebase-config";
 import axios from "axios";
+import NavigationHeader from "../components/NavigationHeader";
 
 const Chat = () => {
   const [messages, setMessages] = useState([
@@ -121,12 +122,15 @@ const Chat = () => {
 
   return (
 <>
+<NavigationHeader />
+
   <Helmet>
     <title>Research Paper Validator - VerifAI</title>
     <meta name="description" content="Validate and cite research papers" />
     <style>
       {`
         body {
+          margin-top: 6rem;
           margin: 0;
           padding: 0;
           background-color: #E6E6FA;
@@ -151,6 +155,7 @@ const Chat = () => {
 
     {/* Sidebar */}
     <div style={{
+      marginTop: "6rem",
       width: "300px",
       backgroundColor: "#e5e5e5",  
       color: "white",
@@ -208,10 +213,12 @@ const Chat = () => {
       </div>
 
       {/* Sidebar Content */}
+      
     </div>
 
     {/* Main content area  */}
     <div style={{
+      marginTop: "6rem",
       marginLeft: "300px", // Adjusted to match sidebar width
       flex: 1,
       display: "flex",

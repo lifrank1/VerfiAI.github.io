@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../styles/LoginScreen.css';  // Ensure this import is at the top
+import '../styles/LoginScreen.css'; 
+import NavigationHeader from '../components/NavigationHeader';
 
 function CreateAccount() {
   const [email, setEmail] = useState('');
@@ -42,7 +43,9 @@ function CreateAccount() {
   };
 
   return (
+    
     <div className="login-page-container">
+      <NavigationHeader />
       <div className="login-section">
         <h2>Create an Account</h2>
         {error && <p className="error-message">{error}</p>}

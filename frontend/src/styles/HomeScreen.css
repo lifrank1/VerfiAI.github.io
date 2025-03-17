@@ -24,6 +24,7 @@ html, body {
 }
 
 .hero-section, .idea-section {
+  margin-top: 6rem;
   scroll-snap-align: start;
   min-height: 100vh;
   width: 100%;

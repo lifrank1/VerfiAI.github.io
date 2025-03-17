@@ -1,40 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import "../styles/HomeScreen.css";
-import logo from '../assets/verifaiLogo.png';
-
-
-const NavigationHeader = () => {
-  return (
-    <header className="nav-header">
-      <div className="nav-container">
-        <div className="logo">
-          <Link to="/">
-            <img src={logo} alt="Logo" className="logo-img" />
-          </Link>
-        </div>
-        <nav className="nav-links">
-          <Link to="/">Home</Link>
-          <Link to="/about">About</Link>
-          <Link to="/features">Features</Link>
-          <Link to="/contact">Contact</Link>
-        </nav>
-      </div>
-      <div className="nav-buttons">
-        <div className="login-button-container">
-          <Link to="/LoginScreen">
-            <button className="login-button">Log In</button> 
-          </Link>
-        </div>
-        <div className="create-account-button-container">
-          <Link to="/create-account">
-            <button className="create-account-button">Create Account</button>
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-};
+import NavigationHeader from "../components/NavigationHeader";
 
 
 

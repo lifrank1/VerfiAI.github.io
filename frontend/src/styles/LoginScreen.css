@@ -1,5 +1,6 @@
 /* LoginScreen.css */
 .login-page-container {
+  margin-top: 6rem;
     width: 100%;
     height: 100vh;
     display: flex;
