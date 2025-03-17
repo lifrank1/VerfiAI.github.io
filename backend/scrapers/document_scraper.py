@@ -3,6 +3,7 @@ import json
 import fitz  # PyMuPDF for PDFs
 import docx
 import os
+import re
 
 def extract_text_from_pdf(pdf_path):
     """Extract text from a PDF file."""
@@ -34,6 +35,27 @@ def extract_text_from_txt(txt_path):
     except Exception as e:
         return f"Error reading TXT file: {e}"
 
+def extract_references(text):
+    """
+    Extracts references from the given text.
+    - Detects numbered references (e.g., '1.', '2.', etc.).
+    - Captures entire references across multiple lines.
+    - Stops at the next reference number.
+    """
+
+    # Regex to find numbered references with text, handling multiple lines
+    reference_pattern = re.compile(r"\n\s*(\d{1,3})\.\s*(.+?)(?=\n\s*\d{1,3}\.|$)", re.DOTALL)
+
+    matches = reference_pattern.findall(text)
+    
+    structured_references = []
+    for match in matches:
+        ref_number, ref_content = match
+        ref_content = ref_content.strip().replace("\n", " ")  # Flatten multiline refs
+        structured_references.append(f"{ref_number}. {ref_content}")
+
+    return structured_references
+
 def main():
     if len(sys.argv) < 2:
         print(json.dumps({"error": "No file path provided"}))
@@ -58,7 +80,10 @@ def main():
         print(json.dumps({"error": "Unsupported file format"}))
         return
 
-    print(json.dumps({"text": extracted_text}))
+    references = extract_references(extracted_text)
+    
+    output = {"references": references}
+    print(json.dumps(output, indent=4))  # Pretty print JSON for readability
 
 if __name__ == "__main__":
     main()
