@@ -55,12 +55,18 @@ def classify_research_field(paper_info):
     
     # Define the research fields this model classifies into
     fields = [
-        "Machine Learning Algorithms", 
-        "Natural Language Processing", 
+        "Natural Language Processing",
         "Computer Vision and Image Processing", 
-        "Robotics and Autonomous Systems", 
+        "Robotics and Autonomous Systems",
+        "Machine Learning",
+        "Deep Learning",
+        "Cybersecurity",
+        "Data Mining",
+        "Cloud Computing",
+        "Internet of Things",
         "Other"
     ]
+
     
     return {
         'field': fields[predicted_class],
@@ -100,17 +106,18 @@ def main(doi):
     try:
         paper_info = get_paper_by_doi(doi)
         if not paper_info:
-            return {
-                'success': False,
-                'error': 'Paper not found'
-            }
+            return {'success': False, 'error': 'Paper not found'}
+            
+        classification = classify_research_field(paper_info)
+        paper_info['research_field'] = classification
+        
+        # Generate citation based on field
+        citation = generate_field_specific_citation(paper_info, classification['field'])
+        paper_info['citation'] = citation
         
         # Check if the paper is retracted by title
         retracted_results = search_retracted_papers(paper_info['title'])
         is_retracted = len(retracted_results) > 0
-        
-        classification = classify_research_field(paper_info)
-        paper_info['research_field'] = classification
         
         # Add retraction info to output
         paper_info['is_retracted'] = is_retracted
@@ -127,7 +134,26 @@ def main(doi):
             'success': False,
             'error': str(e)
         }
-
+def generate_field_specific_citation(paper_info, field):
+    """Generate appropriate citation format based on research field"""
+    
+    citation_formats = {
+        "Machine Learning Algorithms": "IEEE",
+        "Natural Language Processing": "ACL",
+        "Computer Vision and Image Processing": "IEEE",
+        "Robotics and Autonomous Systems": "IEEE",
+        "Other": "MLA"
+    }
+    
+    format_type = citation_formats.get(field, "MLA")
+    authors = " and ".join(paper_info['authors'])
+    
+    if format_type == "IEEE":
+        return f"{authors}, \"{paper_info['title']},\" {paper_info['year']}. DOI: {paper_info['doi']}"
+    elif format_type == "ACL":
+        return f"{authors}. {paper_info['year']}. {paper_info['title']}. DOI: {paper_info['doi']}"
+    else:  # MLA
+        return f"{authors}. \"{paper_info['title']}.\" {paper_info['year']}, doi:{paper_info['doi']}"
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
