@@ -75,97 +75,71 @@
     };  
 
     const searchPaper = async () => {
-      if (input.trim() === "") return;
-    
-      if (input.trim().toLowerCase() === "clear") {
-        setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }]);
-        setInput("");
-        return;
-      }
-    
-      setMessages(prev => [...prev, { type: "user", text: input }]);
-      setIsLoading(true);
-    
-      try {
-        const response = await axios.post("http://localhost:3002/api/analyze-paper", { doi: input });
-        const paper = response.data.paper;
-    
-        let retractionNotice = paper.is_retracted 
-          ? (
-              <div>
-                <p style={{ color: "red", fontWeight: "bold" }}>🚨 This paper may be retracted!</p>
-                <ul style={{ paddingLeft: "2rem" }}>
-                  {paper.retraction_info.map((item, idx) => (
-                    <li key={idx} style={{ marginBottom: "0.5rem" }}>
-                      <b>📌 Title:</b> {item.title}<br />
-                      <b>🔗 DOI:</b> {item.doi}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )
-          : <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>;
-    
-        const formattedMessage = (
+  if (input.trim() === "") return;
+
+  if (input.trim().toLowerCase() === "clear") {
+    setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }]);
+    setInput("");
+    return;
+  }
+
+  setMessages(prev => [...prev, { type: "user", text: input }]);
+  setIsLoading(true);
+
+  try {
+    const response = await axios.post("http://localhost:3002/api/analyze-paper", { doi: input });
+    const paper = response.data.paper;
+
+    let retractionNotice = paper.is_retracted 
+      ? (
           <div>
-            <h3>Paper Details</h3>
-            <p><b>📌 Title:</b> {paper.title}</p>
-            <p><b>👥 Authors:</b></p>
+            <p style={{ color: "red", fontWeight: "bold" }}>🚨 This paper may be retracted!</p>
             <ul style={{ paddingLeft: "2rem" }}>
-              {paper.authors.map((author, index) => (
-                <li key={index} style={{ marginBottom: "0.3rem" }}>{author}</li>
+              {paper.retraction_info.map((item, idx) => (
+                <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                  <b>📌 Title:</b> {item.title}<br />
+                  <b>🔗 DOI:</b> {item.doi}
+                </li>
               ))}
             </ul>
-            <p><b>📊 Research Field:</b> {paper.research_field.field}</p>
-            <p><b>📅 Year:</b> {paper.year}</p>
-            <p><b>🔗 DOI:</b> {paper.doi}</p> 
-            {retractionNotice}
           </div>
-        );
-    
-        setMessages(prev => [...prev, { type: "bot", text: formattedMessage }]);
-    
-        // Save to Firestore
-        if (user && user.userID) {
-          await saveCitationToFirestore(paper, user.userID);
-        }
-    
-      } catch (error) {
-        setMessages(prev => [...prev, { type: "bot", text: "Error analyzing paper. Please check the DOI and try again." }]);
-      } finally {
-        setIsLoading(false);
-        setInput("");
-      }
-    };
-    
+        )
+      : <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>;
 
-    const saveCitationToFirestore = async (paper, userID) => {
-      if (!userID) return;
-    
-      try {
-        const db = getFirestore(firebaseApp);
-        
-        const userRef = doc(db, "users", userID);
+    const formattedMessage = (
+      <div>
+        <h3>Paper Details</h3>
+        <p><b>📌 Title:</b> {paper.title}</p>
+        <p><b>👥 Authors:</b></p>
+        <ul style={{ paddingLeft: "2rem" }}>
+          {paper.authors.map((author, index) => (
+            <li key={index} style={{ marginBottom: "0.3rem" }}>{author}</li>
+          ))}
+        </ul>
+        <p><b>📊 Research Field:</b> {paper.research_field.field}</p>
+        <p><b>📅 Year:</b> {paper.year}</p>
+        <p><b>🔗 DOI:</b> {paper.doi}</p> 
+        {retractionNotice}
+      </div>
+    );
 
-        const citationsRef = collection(userRef, "citations");
-    
-        const newCitation = {
-          title: paper.title,
-          authors: paper.authors,
-          research_field: paper.research_field.field,
-          year: paper.year,
-          doi: paper.doi,
-          retracted: paper.is_retracted,
-          userID: userID,
-          timestamp: new Date(),
-        };
-    
-        await addDoc(citationsRef, newCitation);
-        console.log("Citation saved to Firestore!");
-      } catch (error) {
-        console.error("Error saving citation:", error);
-      }
-    };
+    setMessages(prev => [...prev, { type: "bot", text: formattedMessage }]);
+
+    // Save to backend API instead of Firestore directly
+    if (user && user.userID) {
+      await axios.post("http://localhost:3002/api/save-citation", {
+        paper,
+        userID: user.userID
+      });
+    }
+
+  } catch (error) {
+    setMessages(prev => [...prev, { type: "bot", text: "Error analyzing paper. Please check the DOI and try again." }]);
+  } finally {
+    setIsLoading(false);
+    setInput("");
+  }
+};
     
     
       const handleKeyPress = (e) => {

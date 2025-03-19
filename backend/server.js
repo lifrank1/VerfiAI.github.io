@@ -191,3 +191,36 @@ app.post('/api/analyze-paper', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+app.post("/api/save-citation", async (req, res) => {
+  try {
+    const { paper, userID } = req.body;
+
+    if (!userID) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    const userRef = db.collection("users").doc(userID);
+    const citationsRef = userRef.collection("citations");
+
+    const newCitation = {
+      title: paper.title,
+      authors: paper.authors,
+      research_field: paper.research_field?.field || null,
+      year: paper.year,
+      doi: paper.doi,
+      retracted: paper.is_retracted || false,
+      userID: userID,
+      timestamp: new Date(),
+    };
+
+    const docRef = await citationsRef.add(newCitation);
+
+    console.log("Citation saved to Firestore!");
+    res.json({ success: true, citationId: docRef.id });
+
+  } catch (error) {
+    console.error("Error saving citation:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
