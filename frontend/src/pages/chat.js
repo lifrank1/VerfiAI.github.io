@@ -9,12 +9,15 @@ const Chat = () => {
   const [messages, setMessages] = useState([
     {
       type: "bot",
-      text: "Hello! Enter a paper title, DOI, or ISBN to get started.",
+      text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a PDF document.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [uploadedDocument, setUploadedDocument] = useState(null);
+  const [documentText, setDocumentText] = useState("");
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -120,14 +123,150 @@ const Chat = () => {
       setInput("");
     }
   };
-  
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setMessages(prev => [...prev, { 
+      type: "user", 
+      text: `Uploading document: ${file.name}` 
+    }]);
+    setIsLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await axios.post(
+        "http://localhost:3002/api/upload-document",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setUploadedDocument(file.name);
+        setDocumentText(response.data.extractedText);
+        
+        // Create a formatted message with metadata and references
+        const metadata = response.data.metadata || {};
+        const citationStyle = response.data.citationStyle;
+        
+        let metadataSection = "";
+        if (Object.keys(metadata).length > 0) {
+          metadataSection = (
+            <div style={{ marginBottom: "1rem" }}>
+              <h3>Document Metadata</h3>
+              {metadata.title && <p><b>Title:</b> {metadata.title}</p>}
+              {metadata.authors && metadata.authors.length > 0 && (
+                <div>
+                  <p><b>Authors:</b></p>
+                  <ul style={{ paddingLeft: "2rem" }}>
+                    {metadata.authors.map((author, idx) => (
+                      <li key={idx}>{author}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {metadata.abstract && <p><b>Abstract:</b> {metadata.abstract}</p>}
+              {metadata.keywords && metadata.keywords.length > 0 && (
+                <p><b>Keywords:</b> {metadata.keywords.join(", ")}</p>
+              )}
+              {citationStyle && <p><b>Citation Style:</b> {citationStyle}</p>}
+            </div>
+          );
+        }
+        
+        // Display references if available
+        let referencesMessage = "";
+        if (response.data.references && response.data.references.length > 0) {
+          referencesMessage = (
+            <div>
+              <h3>Extracted References</h3>
+              <ul style={{ paddingLeft: "2rem" }}>
+                {response.data.references.map((ref, idx) => (
+                  <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                    {ref}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+
+        setMessages(prev => [...prev, { 
+          type: "bot", 
+          text: (
+            <div>
+              <p>✅ Document uploaded successfully: <b>{file.name}</b></p>
+              <p>You can now ask questions about this document.</p>
+              {metadataSection}
+              {referencesMessage}
+            </div>
+          )
+        }]);
+      } else {
+        setMessages(prev => [...prev, { 
+          type: "bot", 
+          text: "Error processing document. Please try again." 
+        }]);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: `Error uploading document: ${error.message}` 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChatWithDocument = async () => {
+    if (input.trim() === "" || !documentText) return;
+    
+    setMessages(prev => [...prev, { type: "user", text: input }]);
+    setIsLoading(true);
+    
+    try {
+      const response = await axios.post("http://localhost:3002/api/chat", {
+        message: input,
+        paperContent: documentText
+      });
+      
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: response.data.reply 
+      }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: `Error: ${error.message}` 
+      }]);
+    } finally {
+      setIsLoading(false);
+      setInput("");
+    }
+  };
+
+  const handleSubmit = () => {
+    if (uploadedDocument) {
+      handleChatWithDocument();
+    } else {
+      searchPaper();
+    }
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      searchPaper();
-      setInput("");  // This will clear the input field
+      handleSubmit();
     }
   };
+
   return (
     <>
       <Helmet>
@@ -262,6 +401,36 @@ const Chat = () => {
           borderTop: "1px solid #e5e5e5",
           background: "white",
         }}>
+          {uploadedDocument && (
+            <div style={{
+              padding: "0.5rem",
+              marginBottom: "0.5rem",
+              background: "#f0f0f0",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>📄 Working with: <b>{uploadedDocument}</b></span>
+              <button 
+                onClick={() => {
+                  setUploadedDocument(null);
+                  setDocumentText("");
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#FF4D4D",
+                  cursor: "pointer",
+                  fontSize: "0.9rem"
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+          
           <div style={{
             display: "flex",
             gap: "0.5rem",
@@ -272,7 +441,7 @@ const Chat = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Enter paper title, DOI, or ISBN..."
+              placeholder={uploadedDocument ? "Ask about this document..." : "Enter paper title, DOI, or ISBN..."}
               style={{
                 flex: 1,
                 padding: "0.75rem",
@@ -282,8 +451,32 @@ const Chat = () => {
                 outline: "none",
               }}
             />
+            
             <button
-              onClick={searchPaper}
+              onClick={() => fileInputRef.current.click()}
+              style={{
+                background: "#6E44FF",
+                color: "white",
+                border: "none",
+                padding: "0.75rem",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "1rem",
+                transition: "background-color 0.3s ease",
+              }}
+            >
+              📄
+            </button>
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf,.docx,.txt"
+              style={{ display: "none" }}
+            />
+            
+            <button
+              onClick={handleSubmit}
               style={{
                 background: "#FF4D4D",
                 color: "white",
@@ -295,7 +488,7 @@ const Chat = () => {
                 transition: "background-color 0.3s ease",
               }}
             >
-              Search
+              {uploadedDocument ? "Ask" : "Search"}
             </button>
           </div>
         </div>
