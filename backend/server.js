@@ -115,7 +115,7 @@ app.post("/api/create-user", async (req, res) => {
   pythonProcess.on("close", async (code) => {
     if (code !== 0) {
       return res.status(500).json({ error: "Failed to process document", details: errorData });
-
+    }
 
     try {
       const extractedText = JSON.parse(data).text;
