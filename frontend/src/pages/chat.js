@@ -8,46 +8,20 @@
   import NavigationHeader from "../components/NavigationHeader";
   import { useAuth } from "../contexts/authContext";
 
-  const Chat = () => {
-    const [messages, setMessages] = useState([
-      {
-        type: "bot",
-        text: "Hello! Enter a paper title, DOI, or ISBN to get started.",
-      },
-    ]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [input, setInput] = useState("");
-    const messagesEndRef = useRef(null);
-    const navigate = useNavigate();
-    const user = useAuth(); // Retrieve the current user's UID
-    const [citations, setCitations] = useState([]);
-
-    useEffect(() => {
-      const fetchCitations = () => {
-        if (!user || !user.userID) return;
-    
-        const db = getFirestore(firebaseApp);
-        const userRef = doc(db, "users", user.userID); // Access the user's document
-        
-        // Access the citations subcollection for the user
-        const citationsRef = collection(userRef, "citations");
-        
-        // Set up a real-time listener to automatically update the citations list
-        const unsubscribe = onSnapshot(citationsRef, (querySnapshot) => {
-          const citationsData = querySnapshot.docs.map(doc => doc.data());
-          setCitations(citationsData); // Update state with the latest citations
-        });
-    
-        // Cleanup function to unsubscribe when the component unmounts
-        return () => unsubscribe();
-      };
-    
-      fetchCitations();
-    }, [user]); // This effect will run whenever the user changes
-    
-    
-
-
+const Chat = () => {
+  const [messages, setMessages] = useState([
+    {
+      type: "bot",
+      text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a PDF document.",
+    },
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [input, setInput] = useState("");
+  const [uploadedDocument, setUploadedDocument] = useState(null);
+  const [documentText, setDocumentText] = useState("");
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const navigate = useNavigate();
 
     const handleLogout = async () => {
       const auth = getAuth(firebaseApp);
@@ -103,116 +77,235 @@
               ))}
             </ul>
           </div>
-        )
-      : <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>;
-
-    const formattedMessage = (
-      <div>
-        <h3>Paper Details</h3>
-        <p><b>📌 Title:</b> {paper.title}</p>
-        <p><b>👥 Authors:</b></p>
-        <ul style={{ paddingLeft: "2rem" }}>
-          {paper.authors.map((author, index) => (
-            <li key={index} style={{ marginBottom: "0.3rem" }}>{author}</li>
-          ))}
-        </ul>
-        <p><b>📊 Research Field:</b> {paper.research_field.field}</p>
-        <p><b>📅 Year:</b> {paper.year}</p>
-        <p><b>🔗 DOI:</b> {paper.doi}</p> 
-        {retractionNotice}
-      </div>
-    );
-
-    setMessages(prev => [...prev, { type: "bot", text: formattedMessage }]);
-
-    // Save to backend API instead of Firestore directly
-    if (user && user.userID) {
-      await axios.post("http://localhost:3002/api/save-citation", {
-        paper,
-        userID: user.userID
-      });
-    }
-
-  } catch (error) {
-    setMessages(prev => [...prev, { type: "bot", text: "Error analyzing paper. Please check the DOI and try again." }]);
-  } finally {
-    setIsLoading(false);
-    setInput("");
-  }
-};
-    
-    
-      const handleKeyPress = (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        searchPaper();
+        );
+      } else {
+        retractionNotice = <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>;
       }
-    };
+  
+      const formattedMessage = (
+        <div>
+          <h3>Paper Details</h3>
+          <p><b>📌 Title:</b> {title}</p>
+          <p><b>👥 Authors:</b></p>
+          <ul style={{ paddingLeft: "2rem" }}>
+            {authors.map((author, index) => (
+              <li key={index} style={{ marginBottom: "0.3rem" }}>{author}</li>
+            ))}
+          </ul>
+          <p><b>📊 Research Field:</b> {research_field.field}</p>
+          <p><b>📅 Year:</b> {year}</p>
+          <p><b>🔗 DOI:</b> {doi}</p>
+          {retractionNotice}
+          <p><b>📝 Suggested Citation:</b></p>
+          <div style={{ 
+            background: "#f5f5f5", 
+            padding: "1rem", 
+            borderRadius: "8px",
+            fontFamily: "monospace" 
+          }}>
+            {response.data.paper.citation}
+          </div>
+        </div>
+      );
+  
+      setMessages(prev => [...prev, { type: "bot", text: formattedMessage }]);
+  
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        type: "bot",
+        text: "Error analyzing paper. Please check the DOI and try again."
+      }]);
+    } finally {
+      setIsLoading(false);
+      setInput("");
+    }
+  };
 
-    function Sidebar() {
-      const [isOpen, setIsOpen] = useState(true);  // State to manage whether the citations box is open or not
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setMessages(prev => [...prev, { 
+      type: "user", 
+      text: `Uploading document: ${file.name}` 
+    }]);
+    setIsLoading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await axios.post(
+        "http://localhost:3002/api/upload-document",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setUploadedDocument(file.name);
+        setDocumentText(response.data.extractedText);
+        
+        // Create a formatted message with metadata and references
+        const metadata = response.data.metadata || {};
+        const citationStyle = response.data.citationStyle;
+        
+        let metadataSection = "";
+        if (Object.keys(metadata).length > 0) {
+          metadataSection = (
+            <div style={{ marginBottom: "1rem" }}>
+              <h3>Document Metadata</h3>
+              {metadata.title && <p><b>Title:</b> {metadata.title}</p>}
+              {metadata.authors && metadata.authors.length > 0 && (
+                <div>
+                  <p><b>Authors:</b></p>
+                  <ul style={{ paddingLeft: "2rem" }}>
+                    {metadata.authors.map((author, idx) => (
+                      <li key={idx}>{author}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {metadata.abstract && <p><b>Abstract:</b> {metadata.abstract}</p>}
+              {metadata.keywords && metadata.keywords.length > 0 && (
+                <p><b>Keywords:</b> {metadata.keywords.join(", ")}</p>
+              )}
+              {citationStyle && <p><b>Citation Style:</b> {citationStyle}</p>}
+            </div>
+          );
+        }
+        
+        // Display references if available
+        let referencesMessage = "";
+        if (response.data.references && response.data.references.length > 0) {
+          referencesMessage = (
+            <div>
+              <h3>Extracted References</h3>
+              <ul style={{ paddingLeft: "2rem" }}>
+                {response.data.references.map((ref, idx) => (
+                  <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                    {ref}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+
+        setMessages(prev => [...prev, { 
+          type: "bot", 
+          text: (
+            <div>
+              <p>✅ Document uploaded successfully: <b>{file.name}</b></p>
+              <p>You can now ask questions about this document.</p>
+              {metadataSection}
+              {referencesMessage}
+            </div>
+          )
+        }]);
+      } else {
+        setMessages(prev => [...prev, { 
+          type: "bot", 
+          text: "Error processing document. Please try again." 
+        }]);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: `Error uploading document: ${error.message}` 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChatWithDocument = async () => {
+    if (input.trim() === "" || !documentText) return;
     
-      const handleToggle = () => {
-        setIsOpen(!isOpen);  // Toggle the state
-      }};
+    setMessages(prev => [...prev, { type: "user", text: input }]);
+    setIsLoading(true);
+    
+    try {
+      const response = await axios.post("http://localhost:3002/api/chat", {
+        message: input,
+        paperContent: documentText
+      });
+      
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: response.data.reply 
+      }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: `Error: ${error.message}` 
+      }]);
+    } finally {
+      setIsLoading(false);
+      setInput("");
+    }
+  };
 
+  const handleSubmit = () => {
+    if (uploadedDocument) {
+      handleChatWithDocument();
+    } else {
+      searchPaper();
+    }
+  };
 
-    return (
-  <>
-  <NavigationHeader />
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
 
-    <Helmet>
-      <title>Research Paper Validator - VerifAI</title>
-      <meta name="description" content="Validate and cite research papers" />
-      <style>
-        {`
-          body {
-            margin-top: 6rem;
-            margin: 0;
-            padding: 0;
-            background-color: #E6E6FA;
-            height: 100vh;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-          }
-          @keyframes loading {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(400%); }
-          }
-        `}
-      </style>
-    </Helmet>
-
-    <div style={{
-      display: "flex",
-      height: "100vh",
-      margin: "0 auto",
-      background: "white",
-      boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-    }}>
-
-      {/* Sidebar */}
+  return (
+    <>
+      <Helmet>
+        <title>Research Paper Validator - VerifAI</title>
+        <meta name="description" content="Validate and cite research papers" />
+        <style>
+          {`
+            body {
+              margin: 0;
+              padding: 0;
+              background-color: #E6E6FA;
+              height: 100vh;
+              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            }
+            @keyframes loading {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(400%); }
+            }
+          `}
+        </style>
+      </Helmet>
       <div style={{
-         marginTop: "6rem",
-         width: "300px",
-         height: "100vh",
-         backgroundColor: "#e5e5e5",  
-         color: "white",
-         padding: "1.5rem 1rem",
-         display: "flex",
-         flexDirection: "column",
-         position: "fixed",
-         top: "0",
-         left: "0",
-         bottom: "0",
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        maxWidth: "1000px",
+        margin: "0 auto",
+        background: "white",
+        boxShadow: "0 0 10px rgba(0,0,0,0.1)",
       }}>
-        {/* Header (VerifAI Chat + Logout Button) */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: "2px solid white", // Underline effect
-          paddingBottom: "0.5rem",
-        }}>
+        <div
+          style={{
+            padding: "1rem",
+            borderBottom: "1px solid #e5e5e5",
+            background: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingLeft: "2rem",
+            paddingRight: "2rem",
+          }}
+        >
           <h1
             style={{
               margin: 0,
@@ -327,6 +420,36 @@
           borderTop: "1px solid #e5e5e5",
           background: "white",
         }}>
+          {uploadedDocument && (
+            <div style={{
+              padding: "0.5rem",
+              marginBottom: "0.5rem",
+              background: "#f0f0f0",
+              borderRadius: "8px",
+              fontSize: "0.9rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <span>📄 Working with: <b>{uploadedDocument}</b></span>
+              <button 
+                onClick={() => {
+                  setUploadedDocument(null);
+                  setDocumentText("");
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#FF4D4D",
+                  cursor: "pointer",
+                  fontSize: "0.9rem"
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+          
           <div style={{
             display: "flex",
             gap: "0.5rem",
@@ -337,7 +460,7 @@
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Enter paper title, DOI, or ISBN..."
+              placeholder={uploadedDocument ? "Ask about this document..." : "Enter paper title, DOI, or ISBN..."}
               style={{
                 flex: 1,
                 padding: "0.75rem",
@@ -347,8 +470,32 @@
                 outline: "none",
               }}
             />
+            
             <button
-              onClick={searchPaper}
+              onClick={() => fileInputRef.current.click()}
+              style={{
+                background: "#6E44FF",
+                color: "white",
+                border: "none",
+                padding: "0.75rem",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "1rem",
+                transition: "background-color 0.3s ease",
+              }}
+            >
+              📄
+            </button>
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf,.docx,.txt"
+              style={{ display: "none" }}
+            />
+            
+            <button
+              onClick={handleSubmit}
               style={{
                 background: "#FF4D4D",
                 color: "white",
@@ -360,7 +507,7 @@
                 transition: "background-color 0.3s ease",
               }}
             >
-              Search
+              {uploadedDocument ? "Ask" : "Search"}
             </button>
           </div>
         </div>
