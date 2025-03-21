@@ -1,5 +1,6 @@
 /* LoginScreen.css */
 .login-page-container {
+  margin-top: 6rem;
     width: 100%;
     height: 100vh;
     display: flex;
@@ -52,7 +53,7 @@
     border: none;
     padding: 1rem;
     font-size: 1.2rem;
-    border-radius: 25px;
+    border-radius: 15px;
     cursor: pointer;
     transition: background-color 0.3s ease;
   }
@@ -86,4 +87,5 @@
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
   }
+  
   

@@ -5,9 +5,12 @@ import LoginScreen from "./pages/LoginScreen";
 import CreateAccountScreen from "./pages/CreateAccountScreen";
 import Chat from "./pages/chat";
 import ApiDocs from './components/ApiDocs';
+import { AuthProvider } from "./contexts/authContext";
+
 
 function App() {
   return (
+    <AuthProvider>
     <Router>
       <Routes>
         <Route path="/api" element={<ApiDocs />} />
@@ -17,6 +20,7 @@ function App() {
         <Route path="/chat" element={<Chat />} />
       </Routes>
     </Router>
+    </AuthProvider>
   );
 }
 

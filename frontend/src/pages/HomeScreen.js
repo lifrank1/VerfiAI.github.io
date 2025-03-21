@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import '../styles/HomeScreen.css';
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import "../styles/HomeScreen.css";
+import NavigationHeader from "../components/NavigationHeader";
+
+
+
 
 const WordAnimation = () => {
   const [activeWord, setActiveWord] = useState(0);
@@ -38,6 +42,7 @@ const HomeScreen = () => {
 
   return (
     <div className="page-container">
+      <NavigationHeader />
       <div className="hero-section">
         <div className="container text-center">
           <h1 className="app-name">VerifAI</h1>
@@ -47,7 +52,7 @@ const HomeScreen = () => {
             <span className="highlight-word">ensure</span>academic integrity.
           </p>
           <Link to="/LoginScreen">
-          <button className="login-button">Log In</button>
+            <button className="login-button">Log In</button>
           </Link>
           <div className="scroll-indicator" onClick={scrollToNextSection}>
             <svg width="24" height="24" viewBox="0 0 24 24">

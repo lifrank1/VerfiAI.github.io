@@ -3,9 +3,13 @@ import { Link } from "react-router-dom";
 import { firebaseApp } from "../firebase-config";
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { useNavigate } from "react-router-dom"; // Importing useNavigate for routing
+import NavigationHeader from "../components/NavigationHeader";
 import "../styles/LoginScreen.css";
+import { useAuth } from "../contexts/authContext";
+
 
 const LoginScreen = () => {
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,6 +22,8 @@ const LoginScreen = () => {
     signInWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
         console.log("Logged in successfully", userCredential);
+        const userID = userCredential.user.uid; 
+        login(userID);
         navigate("/chat"); // Redirect to chat page after successful login
       })
       .catch((error) => {
@@ -55,6 +61,7 @@ const LoginScreen = () => {
 
   return (
     <div className="login-page-container">
+      <NavigationHeader />
       <div className="login-section">
         <h1 className="app-name">VerifAI</h1>
         <form onSubmit={handleLogin} className="login-form">
