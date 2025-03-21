@@ -1,12 +1,9 @@
-  import React, { useState, useRef, useEffect } from "react";
-  import { Helmet } from "react-helmet";
-  import { useNavigate } from "react-router-dom";
-  import { getAuth, signOut } from "firebase/auth";
-  import { firebaseApp } from "../firebase-config";
-  import { getFirestore, collection, doc, addDoc, onSnapshot } from "firebase/firestore";
-  import axios from "axios";
-  import NavigationHeader from "../components/NavigationHeader";
-  import { useAuth } from "../contexts/authContext";
+import React, { useState, useRef, useEffect } from "react";
+import { Helmet } from "react-helmet";
+import { useNavigate } from "react-router-dom";
+import { getAuth, signOut } from "firebase/auth";
+import { firebaseApp } from "../firebase-config";
+import axios from "axios";
 
 const Chat = () => {
   const [messages, setMessages] = useState([
@@ -23,53 +20,59 @@ const Chat = () => {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
-    const handleLogout = async () => {
-      const auth = getAuth(firebaseApp);
-      try {
-        await signOut(auth);
-        navigate("/");
-      } catch (error) {
-        console.error("Error signing out: ", error);
-      }
-    };
+  const handleLogout = async () => {
+    const auth = getAuth(firebaseApp);
+    try {
+      await signOut(auth);
+      navigate("/");
+    } catch (error) {
+      console.error("Error signing out: ", error);
+    }
+  };
 
-    const scrollToBottom = () => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
-      }
-    };
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+    }
+  };
 
-    useEffect(() => {
-      scrollToBottom();
-    }, [messages]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-    const isISBN = (input) => {
-      // Basic ISBN validation (both ISBN-10 and ISBN-13)
-      return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ''));
-    };  
+  const isISBN = (input) => {
+    // Basic ISBN validation (both ISBN-10 and ISBN-13)
+    return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ''));
+  };
 
-    const searchPaper = async () => {
-  if (input.trim() === "") return;
-
-  if (input.trim().toLowerCase() === "clear") {
-    setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }]);
-    setInput("");
-    return;
-  }
-
-  setMessages(prev => [...prev, { type: "user", text: input }]);
-  setIsLoading(true);
-
-  try {
-    const response = await axios.post("http://localhost:3002/api/analyze-paper", { doi: input });
-    const paper = response.data.paper;
-
-    let retractionNotice = paper.is_retracted 
-      ? (
+  const searchPaper = async () => {
+    if (input.trim() === "") return;
+  
+    if (input.trim().toLowerCase() === "clear") {
+      setMessages([
+        { type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }
+      ]);
+      setInput("");
+      return;
+    }
+  
+    setMessages(prev => [...prev, { type: "user", text: input }]);
+    setIsLoading(true);
+  
+    try {
+      const response = await axios.post("http://localhost:3002/api/analyze-paper", {
+        doi: input
+      });
+  
+      const { is_retracted, retraction_info, title, authors, research_field, year, doi } = response.data.paper;
+  
+      let retractionNotice;
+      if (is_retracted) {
+        retractionNotice = (
           <div>
             <p style={{ color: "red", fontWeight: "bold" }}>🚨 This paper may be retracted!</p>
             <ul style={{ paddingLeft: "2rem" }}>
-              {paper.retraction_info.map((item, idx) => (
+              {retraction_info.map((item, idx) => (
                 <li key={idx} style={{ marginBottom: "0.5rem" }}>
                   <b>📌 Title:</b> {item.title}<br />
                   <b>🔗 DOI:</b> {item.doi}
@@ -315,52 +318,31 @@ const Chat = () => {
               WebkitBackgroundClip: "text",
               backgroundClip: "text",
               animation: "gradient-animation 10s ease infinite",
-              fontSize: "1.5rem",
             }}
           >
-            Citations
+            VerifAI Chat
           </h1>
-
-          {/* Logout Button */}
-          
+          <button
+            onClick={handleLogout}
+            style={{
+              background: "transparent",
+              border: "2px solid #FF4D4D",
+              color: "#FF4D4D",
+              padding: "0.5rem 1rem",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "0.9rem",
+              transition: "all 0.3s ease",
+              fontWeight: "500",
+              ":hover": {
+                background: "#FF4D4D",
+                color: "white",
+              },
+            }}
+          >
+            Logout
+          </button>
         </div>
-
-        {/* Sidebar Content */}
-          {/* Citations list */}
-  <div style={{ marginTop: "1rem", paddingTop: "0.5rem", overflowY: "auto", maxHeight: "85%" }}>
-  {citations.length > 0 ? (
-    citations.map((citation, idx) => (
-      <div key={idx} style={{
-        marginBottom: "1rem",
-        background: "#fff",
-        padding: "0.5rem",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-      }}>
-        <p style={{ color: "#333"}}><b>{citation.title}</b></p>
-        <p style={{ color: "#555" }}>{citation.authors && Array.isArray(citation.authors) ? citation.authors.join(", ") : "No authors available"}
-        </p>
-        <p style={{ color: "#555" }}>Year: {citation.year}</p>
-        <p><a href={`https://doi.org/${citation.doi}`} target="_blank" rel="noopener noreferrer">DOI</a></p>
-      </div>
-    ))
-  ) : (
-    <p>No citations saved yet!</p>
-  )}
-</div>
-      </div>
-
-      {/* Main content area  */}
-      <div style={{
-        marginTop: "6rem",
-        marginLeft: "300px", // Adjusted to match sidebar width
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        padding: "1rem",
-      }}>
-        
-        {/* Chat Messages */}
         <div style={{
           flex: 1,
           overflowY: "auto",
@@ -387,7 +369,7 @@ const Chat = () => {
               </div>
             </div>
           ))}
-
+          
           {isLoading && (
             <div style={{
               padding: "1rem",
@@ -414,7 +396,6 @@ const Chat = () => {
           )}
         </div>
 
-        {/* Search Bar */}
         <div style={{
           padding: "1rem",
           borderTop: "1px solid #e5e5e5",
@@ -512,11 +493,8 @@ const Chat = () => {
           </div>
         </div>
       </div>
-    </div>
-  </>
+    </>
+  );
+};
 
-
-    );
-  };
-
-  export default Chat;
+export default Chat;
