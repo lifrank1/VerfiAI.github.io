@@ -36,59 +36,7 @@ const storage = multer.diskStorage({
   },
 });
 
-
-  // 🔹 API route to create a new user
-app.post("/api/create-user", async (req, res) => {
-  const { email, password, firstName, lastName } = req.body;
-
-  try {
-    // Check if email exists first
-    const usersByEmail = await admin.auth().getUserByEmail(email);
-    
-    // If we get here, the email exists
-    return res.status(400).json({
-      success: false,
-      message: "Email already in use.",
-    });
-  } catch (error) {
-    // If error code is auth/user-not-found, the email is available
-    if (error.code === 'auth/user-not-found') {
-      try {
-        // Create the new user
-        const userRecord = await admin.auth().createUser({
-          email,
-          password,
-        });
-
-        
-        // Store additional user details in Firestore
-        await db.collection("users").doc(userRecord.uid).set({
-          firstName,
-          lastName,
-          email,
-          createdAt: new Date(),
-        });
-
-        return res.json({ success: true, uid: userRecord.uid });
-
-      } catch (createError) {
-        console.error("Error creating user:", createError);
-        return res.status(400).json({
-          success: false,
-          message: createError.message,
-        });
-      }
-    }
-
-    // Handle any other errors
-    console.error("Error checking email:", error);
-    return res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
-  const upload = multer({ storage: storage });
+const upload = multer({ storage: storage });
 
 // 🔹 API: Create a new user
 app.post("/api/create-user", async (req, res) => {
@@ -120,14 +68,37 @@ app.post("/api/create-user", async (req, res) => {
           email,
           createdAt: new Date(),
         });
-  /**
- * 🔹 API: Upload Document and Process Contents
- */
-  app.post("/api/upload-document", upload.single("file"), async (req, res) => {
+
+        return res.json({ success: true, uid: userRecord.uid });
+      } catch (createError) {
+        console.error("Error creating user:", createError);
+        return res.status(400).json({
+          success: false,
+          message: createError.message,
+        });
+      }
+    }
+
+    // Handle any other errors
+    console.error("Error checking email:", error);
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// 🔹 API: Upload Document and Process Contents
+app.post("/api/upload-document", upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded." });
   }
   console.log("Uploaded file:", req.file.path);
+
+  // Ensure uploads directory exists
+  if (!fs.existsSync("uploads")) {
+    fs.mkdirSync("uploads");
+  }
 
   const pythonProcess = spawn("python3", [
     "./backend/scrapers/document_scraper.py",
@@ -153,31 +124,38 @@ app.post("/api/create-user", async (req, res) => {
     }
 
     try {
-      const extractedText = JSON.parse(data).text;
+      const result = JSON.parse(data);
+      
+      if (result.error) {
+        return res.status(500).json({ error: result.error, details: result.details || "" });
+      }
+      
+      const extractedText = result.text;
+      const references = result.references || [];
+      const metadata = result.metadata || {};
+      const citationStyle = result.citation_style;
+
       const docRef = await db.collection("documents").add({
         fileName: req.file.originalname,
         extractedText,
+        references,
+        metadata,
+        citationStyle,
         uploadedAt: new Date(),
       });
 
-        return res.json({ success: true, uid: userRecord.uid });
-
-      } catch (createError) {
-        console.error("Error creating user:", createError);
-        return res.status(400).json({
-          success: false,
-          message: createError.message,
-        });
-      }
+      res.json({ 
+        success: true, 
+        documentId: docRef.id, 
+        extractedText,
+        references,
+        metadata,
+        citationStyle
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Invalid JSON response", details: e.message });
     }
-
-    // Handle any other errors
-    console.error("Error checking email:", error);
-    return res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
+  });
 });
 
 // 🔹 API: Generate Citations
@@ -304,76 +282,6 @@ app.post("/api/isbn-citation", async (req, res) => {
   }
 });
 
-// 🔹 API: Upload Document and Process Contents
-app.post("/api/upload-document", upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: "No file uploaded." });
-  }
-
-  console.log("Uploaded file:", req.file.path);
-
-  // Ensure uploads directory exists
-  if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
-  }
-
-  const pythonProcess = spawn("python3", [
-    "./backend/scrapers/document_scraper.py",
-    req.file.path,
-  ]);
-
-  let data = "";
-  let errorData = "";
-
-  pythonProcess.stdout.on("data", (chunk) => {
-    data += chunk;
-    console.log("Python Output:", chunk.toString());
-  });
-
-  pythonProcess.stderr.on("data", (chunk) => {
-    errorData += chunk;
-    console.error("Python Error:", chunk.toString());
-  });
-
-  pythonProcess.on("close", async (code) => {
-    if (code !== 0) {
-      return res.status(500).json({ error: "Failed to process document", details: errorData });
-    }
-
-    try {
-      const result = JSON.parse(data);
-      
-      if (result.error) {
-        return res.status(500).json({ error: result.error, details: result.details || "" });
-      }
-      
-      const extractedText = result.text;
-      const references = result.references;
-      const metadata = result.metadata || {};
-      const citationStyle = result.citation_style;
-
-      const docRef = await db.collection("documents").add({
-        fileName: req.file.originalname,
-        extractedText,
-        references,
-        metadata,
-        citationStyle,
-        uploadedAt: new Date(),
-      });
-
-      res.json({ 
-        success: true, 
-        documentId: docRef.id, 
-        extractedText,
-        references,
-        metadata,
-        citationStyle
-      });
-    } catch (e) {
-      res.status(500).json({ error: "Invalid JSON response", details: e.message });
-    }
-  });
-});
 // 🔹 API: Retrieve Uploaded Documents
 app.get("/api/documents", async (req, res) => {
   try {
