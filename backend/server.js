@@ -372,6 +372,117 @@ app.delete("/api/papers/:doi", async (req, res) => {
   }
 });
 
+// 🔹 API: Verify Reference
+app.post('/api/verify-reference', async (req, res) => {
+  const { reference } = req.body;
+  console.log('Verifying reference:', reference);
+  
+  try {
+    // First priority: Check if the reference has a DOI
+    if (reference.doi) {
+      // Use the DOI verification method
+      const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+      const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', reference.doi]);
+      
+      let data = '';
+      let errorData = '';
+      
+      pythonProcess.stdout.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      pythonProcess.stderr.on('data', (chunk) => {
+        errorData += chunk;
+      });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          return res.status(500).json({ 
+            verification_status: 'failed',
+            error: 'Failed to verify reference', 
+            details: errorData 
+          });
+        }
+        
+        try {
+          const results = JSON.parse(data);
+          const isVerified = results.arxiv.length > 0 || 
+                           results.semantic_scholar.length > 0 || 
+                           results.crossref.length > 0;
+          const isRetracted = results.retracted.length > 0;
+          
+          res.json({
+            verification_status: isVerified ? (isRetracted ? 'retracted' : 'verified') : 'not_found',
+            results
+          });
+        } catch (e) {
+          res.status(500).json({ 
+            verification_status: 'failed',
+            error: 'Invalid JSON response', 
+            details: e.message 
+          });
+        }
+      });
+    } 
+    // Second priority: Use the title to search
+    else if (reference.title) {
+      const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+      const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', reference.title]);
+      
+      let data = '';
+      let errorData = '';
+      
+      pythonProcess.stdout.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      pythonProcess.stderr.on('data', (chunk) => {
+        errorData += chunk;
+      });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          return res.status(500).json({ 
+            verification_status: 'failed',
+            error: 'Failed to verify reference', 
+            details: errorData 
+          });
+        }
+        
+        try {
+          const results = JSON.parse(data);
+          const isVerified = results.arxiv.length > 0 || 
+                           results.semantic_scholar.length > 0 || 
+                           results.crossref.length > 0;
+          const isRetracted = results.retracted.length > 0;
+          
+          res.json({
+            verification_status: isVerified ? (isRetracted ? 'retracted' : 'verified') : 'not_found',
+            results
+          });
+        } catch (e) {
+          res.status(500).json({ 
+            verification_status: 'failed',
+            error: 'Invalid JSON response', 
+            details: e.message 
+          });
+        }
+      });
+    } else {
+      res.status(400).json({ 
+        verification_status: 'failed',
+        error: 'Reference must have either a DOI or title for verification'
+      });
+    }
+  } catch (error) {
+    console.error("Reference verification error:", error);
+    res.status(500).json({ 
+      verification_status: 'failed',
+      error: error.message 
+    });
+  }
+});
+
 // 🔹 Start the Server
 const port = 3002;
 app.listen(port, () => {

@@ -7,6 +7,7 @@ import { getFirestore, collection, doc, addDoc, onSnapshot } from "firebase/fire
 import axios from "axios";
 import NavigationHeader from "../components/NavigationHeader";
 import { useAuth } from "../contexts/authContext";
+import "../styles/ReferenceVerification.css";
 
 const Chat = () => {
   const [messages, setMessages] = useState([
@@ -106,6 +107,22 @@ const Chat = () => {
           )
         : <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>;
   
+      // Create references section with verification functionality
+      const references = (
+        <div className="references-container">
+          <h4 className="references-title">References {paper.references && paper.references.length > 0 ? `(${paper.references.length})` : ''}</h4>
+          {paper.references && paper.references.length > 0 ? (
+            <ul className="references-list">
+              {paper.references.map((ref, idx) => (
+                <ReferenceItem key={idx} reference={ref} index={idx} />
+              ))}
+            </ul>
+          ) : (
+            <p>No references available for this paper.</p>
+          )}
+        </div>
+      );
+  
       const formattedMessage = (
         <div>
           <h3>Paper Details</h3>
@@ -120,6 +137,7 @@ const Chat = () => {
           <p><b>📅 Year:</b> {paper.year}</p>
           <p><b>🔗 DOI:</b> {paper.doi}</p> 
           {retractionNotice}
+          {references}
         </div>
       );
   
@@ -395,6 +413,160 @@ const Chat = () => {
 </>
 
 
+  );
+};
+
+// ReferenceItem component for displaying and verifying individual references
+const ReferenceItem = ({ reference, index }) => {
+  const [verificationStatus, setVerificationStatus] = useState(reference.verification_status || 'pending');
+  const [results, setResults] = useState(null);
+  
+  const verifyReference = async () => {
+    try {
+      setVerificationStatus('in_progress');
+      
+      const response = await axios.post('http://localhost:3002/api/verify-reference', {
+        reference
+      });
+      
+      setVerificationStatus(response.data.verification_status);
+      setResults(response.data.results);
+    } catch (error) {
+      console.error('Error verifying reference:', error);
+      setVerificationStatus('failed');
+    }
+  };
+  
+  // Status indicator configurations
+  const statusInfo = {
+    pending: { icon: '⚪', text: 'Not Verified' },
+    in_progress: { icon: '🔄', text: 'Verifying...' },
+    verified: { icon: '✅', text: 'Verified' },
+    not_found: { icon: '⚠️', text: 'Not Found' },
+    failed: { icon: '❌', text: 'Verification Failed' },
+    retracted: { icon: '🚫', text: 'Retracted' }
+  };
+  
+  const status = statusInfo[verificationStatus] || statusInfo.pending;
+  
+  return (
+    <li className="reference-item">
+      <div className="reference-header">
+        <div className="reference-content">
+          <p className="reference-title">
+            [{index + 1}] {reference.title || reference.unstructured || 'Untitled Reference'}
+          </p>
+          {reference.authors && reference.authors.length > 0 && (
+            <p className="reference-authors">
+              {Array.isArray(reference.authors) ? reference.authors.join(', ') : reference.authors}
+            </p>
+          )}
+          {reference.year && (
+            <p className="reference-year">Year: {reference.year}</p>
+          )}
+          {reference.doi && (
+            <p className="reference-doi">
+              DOI: <a href={`https://doi.org/${reference.doi}`} target="_blank" rel="noopener noreferrer">
+                {reference.doi}
+              </a>
+            </p>
+          )}
+        </div>
+        
+        <div className="reference-status-container">
+          <div className={`status-badge status-${verificationStatus}`}>
+            <span className="status-icon">{status.icon}</span>
+            <span className="status-text">{status.text}</span>
+          </div>
+          
+          {verificationStatus === 'pending' && (
+            <button 
+              onClick={verifyReference}
+              className="verify-button"
+            >
+              Verify
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Display verification results if available */}
+      {results && verificationStatus !== 'failed' && verificationStatus !== 'pending' && (
+        <div className="results-container">
+          <p className="results-heading">Verification Results:</p>
+          
+          {results.crossref && results.crossref.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title">Found on CrossRef:</p>
+              <ul className="results-list">
+                {results.crossref.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <strong>{item.title}</strong>
+                    {item.publisher && <span> - {item.publisher}</span>}
+                    {item.year && <span> ({item.year})</span>}
+                    <br />
+                    <a href={`https://doi.org/${item.doi}`} target="_blank" rel="noopener noreferrer">
+                      DOI: {item.doi}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {results.arxiv && results.arxiv.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title">Found on ArXiv:</p>
+              <ul className="results-list">
+                {results.arxiv.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <a href={item.link} target="_blank" rel="noopener noreferrer">{item.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {results.semantic_scholar && results.semantic_scholar.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title">Found on Semantic Scholar:</p>
+              <ul className="results-list">
+                {results.semantic_scholar.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <a href={`https://www.semanticscholar.org/paper/${item.paperId}`} target="_blank" rel="noopener noreferrer">
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {results.retracted && results.retracted.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title retracted-title">Retraction Information:</p>
+              <ul className="results-list">
+                {results.retracted.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <span className="retracted-title">{item.title}</span> - 
+                    <a href={`https://doi.org/${item.doi}`} target="_blank" rel="noopener noreferrer">DOI: {item.doi}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {((results.crossref && results.crossref.length === 0) &&
+            (results.arxiv && results.arxiv.length === 0) && 
+            (results.semantic_scholar && results.semantic_scholar.length === 0) &&
+            (results.retracted && results.retracted.length === 0)) && (
+            <p className="not-found-message">
+              This reference was not found in any of the searched databases.
+            </p>
+          )}
+        </div>
+      )}
+    </li>
   );
 };
 

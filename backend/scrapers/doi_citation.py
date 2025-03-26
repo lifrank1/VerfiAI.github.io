@@ -21,6 +21,37 @@ def get_paper_by_doi(doi):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()['message']
+            
+            # Extract references if available
+            references = []
+            if 'reference' in data:
+                for ref in data.get('reference', []):
+                    reference_item = {
+                        'key': ref.get('key', ''),
+                        'doi': ref.get('DOI', ''),
+                        'title': '',
+                        'authors': [],
+                        'year': '',
+                        'unstructured': ref.get('unstructured', ''),
+                        'verification_status': 'pending'  # Initial status
+                    }
+                    
+                    # Extract title
+                    if 'article-title' in ref:
+                        reference_item['title'] = ref['article-title']
+                    elif 'unstructured' in ref:
+                        reference_item['title'] = ref['unstructured']
+                    
+                    # Extract authors
+                    if 'author' in ref:
+                        reference_item['authors'] = ref['author'].split(',')
+                    
+                    # Extract year
+                    if 'year' in ref:
+                        reference_item['year'] = ref['year']
+                    
+                    references.append(reference_item)
+            
             return {
                 'title': data.get('title', [''])[0],
                 'authors': [
@@ -29,7 +60,8 @@ def get_paper_by_doi(doi):
                 ],
                 'year': str(data.get('published-print', {}).get('date-parts', [['']])[0][0]),
                 'doi': doi,
-                'abstract': data.get('abstract', '')
+                'abstract': data.get('abstract', ''),
+                'references': references
             }
     except Exception as e:
         print(f"Error fetching DOI: {e}")
