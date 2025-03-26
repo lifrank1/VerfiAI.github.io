@@ -13,12 +13,15 @@ const Chat = () => {
   const [messages, setMessages] = useState([
     {
       type: "bot",
-      text: "Hello! Enter a paper title, DOI, or ISBN to get started.",
+      text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const user = useAuth(); // Retrieve the current user's UID
   const [citations, setCitations] = useState([]);
@@ -46,10 +49,6 @@ const Chat = () => {
     fetchCitations();
   }, [user]); // This effect will run whenever the user changes
   
-  
-
-
-
   const handleLogout = async () => {
     const auth = getAuth(firebaseApp);
     try {
@@ -75,11 +74,135 @@ const Chat = () => {
     return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ''));
   };  
 
+  // New functions for file upload
+  const handleFileChange = (e) => {
+    if (e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setUploadedFile(file);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
+  const uploadDocument = async () => {
+    if (!uploadedFile) return;
+    
+    setIsLoading(true);
+    setMessages(prev => [...prev, { 
+      type: "user", 
+      text: `Uploading document: ${uploadedFile.name}` 
+    }]);
+
+    const formData = new FormData();
+    formData.append('file', uploadedFile);
+
+    try {
+      const response = await axios.post(
+        "http://localhost:3002/api/upload-document", 
+        formData, 
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percentCompleted);
+          }
+        }
+      );
+
+      const documentData = response.data;
+
+      // Format the document analysis results
+      const formattedMessage = (
+        <div>
+          <h3>Document Analysis</h3>
+          <p><b>📄 File Name:</b> {documentData.file_name || uploadedFile.name}</p>
+          <p><b>📋 File Type:</b> {documentData.file_type || uploadedFile.name.split('.').pop()}</p>
+          
+          {documentData.metadata && (
+            <div>
+              <h4>Metadata</h4>
+              {documentData.metadata.title && <p><b>Title:</b> {documentData.metadata.title}</p>}
+              {documentData.metadata.authors && (
+                <div>
+                  <p><b>Authors:</b></p>
+                  <ul style={{ paddingLeft: "2rem" }}>
+                    {documentData.metadata.authors.map((author, idx) => (
+                      <li key={idx}>{author}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {documentData.metadata.abstract && (
+                <p><b>Abstract:</b> {documentData.metadata.abstract}</p>
+              )}
+              {documentData.metadata.keywords && (
+                <p><b>Keywords:</b> {documentData.metadata.keywords.join(', ')}</p>
+              )}
+            </div>
+          )}
+          
+          {documentData.citation_style && (
+            <p><b>Citation Style:</b> {documentData.citation_style}</p>
+          )}
+          
+          {documentData.references && documentData.references.length > 0 && (
+            <div className="references-container">
+              <h4 className="references-title">References ({documentData.references.length})</h4>
+              <ul className="references-list">
+                {documentData.references.map((ref, idx) => (
+                  <ReferenceItem 
+                    key={idx} 
+                    reference={{ unstructured: ref }} 
+                    index={idx} 
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      );
+
+      setMessages(prev => [...prev, { type: "bot", text: formattedMessage }]);
+      
+      // Save to Firestore if it's a valid document with metadata
+      if (user && user.userID && documentData.metadata && documentData.metadata.title) {
+        await saveCitationToFirestore({
+          title: documentData.metadata.title,
+          authors: documentData.metadata.authors || [],
+          research_field: { field: "Document Upload" },
+          year: new Date().getFullYear().toString(),
+          doi: "N/A",
+          is_retracted: false
+        }, user.userID);
+      }
+      
+      // Reset file input
+      setUploadedFile(null);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      setMessages(prev => [...prev, { 
+        type: "bot", 
+        text: "Error analyzing the document. Please check the file format and try again." 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const searchPaper = async () => {
     if (input.trim() === "") return;
   
     if (input.trim().toLowerCase() === "clear") {
-      setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }]);
+      setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis." }]);
       setInput("");
       return;
     }
@@ -156,7 +279,6 @@ const Chat = () => {
     }
   };
   
-
   const saveCitationToFirestore = async (paper, userID) => {
     if (!userID) return;
   
@@ -185,8 +307,7 @@ const Chat = () => {
     }
   };
   
-  
-    const handleKeyPress = (e) => {
+  const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       searchPaper();
@@ -199,7 +320,6 @@ const Chat = () => {
     const handleToggle = () => {
       setIsOpen(!isOpen);  // Toggle the state
     }};
-
 
   return (
 <>
@@ -221,6 +341,39 @@ const Chat = () => {
         @keyframes loading {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(400%); }
+        }
+        .file-upload-container {
+          display: flex;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .file-upload-button {
+          background: #6E44FF;
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          margin-right: 0.5rem;
+        }
+        .file-name {
+          margin-left: 0.5rem;
+          font-size: 0.9rem;
+          color: #555;
+        }
+        .upload-progress {
+          height: 4px;
+          background: #f0f0f0;
+          border-radius: 2px;
+          margin-top: 0.5rem;
+          overflow: hidden;
+        }
+        .upload-progress-bar {
+          height: 100%;
+          background: #6E44FF;
+          border-radius: 2px;
+          transition: width 0.3s ease;
         }
       `}
     </style>
@@ -365,12 +518,51 @@ const Chat = () => {
         )}
       </div>
 
-      {/* Search Bar */}
+      {/* Search Bar with File Upload */}
       <div style={{
         padding: "1rem",
         borderTop: "1px solid #e5e5e5",
         background: "white",
       }}>
+        {/* File Upload Section */}
+        <div className="file-upload-container">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+            accept=".pdf,.docx,.txt"
+          />
+          <button 
+            className="file-upload-button"
+            onClick={triggerFileInput}
+          >
+            Upload Document
+          </button>
+          
+          {uploadedFile && (
+            <>
+              <span className="file-name">{uploadedFile.name}</span>
+              <button 
+                className="file-upload-button"
+                onClick={uploadDocument}
+                style={{ marginLeft: '0.5rem' }}
+              >
+                Analyze
+              </button>
+            </>
+          )}
+        </div>
+        
+        {uploadProgress > 0 && uploadProgress < 100 && (
+          <div className="upload-progress">
+            <div 
+              className="upload-progress-bar" 
+              style={{ width: `${uploadProgress}%` }}
+            ></div>
+          </div>
+        )}
+
         <div style={{
           display: "flex",
           gap: "0.5rem",
@@ -411,8 +603,6 @@ const Chat = () => {
     </div>
   </div>
 </>
-
-
   );
 };
 
@@ -454,7 +644,7 @@ const ReferenceItem = ({ reference, index }) => {
       <div className="reference-header">
         <div className="reference-content">
           <p className="reference-title">
-            [{index + 1}] {reference.title || reference.unstructured || 'Untitled Reference'}
+            {reference.title || reference.unstructured || 'Untitled Reference'}
           </p>
           {reference.authors && reference.authors.length > 0 && (
             <p className="reference-authors">
