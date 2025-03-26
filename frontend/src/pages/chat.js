@@ -27,12 +27,14 @@ const Chat = () => {
   const [input, setInput] = useState("");
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const user = useAuth(); // Retrieve the current user's UID
   const [citations, setCitations] = useState([]);
 
+  // Listen for real-time updates to citations
   useEffect(() => {
     const fetchCitations = () => {
       if (!user || !user.userID) return;
@@ -46,7 +48,7 @@ const Chat = () => {
         // Include Firestore doc ID
         const citationsData = querySnapshot.docs.map((doc) => ({
           ...doc.data(),
-          id: doc.id, 
+          id: doc.id,
         }));
         setCitations(citationsData);
       });
@@ -54,12 +56,9 @@ const Chat = () => {
       return () => unsubscribe();
     };
 
+    // This effect will run whenever the user changes
     fetchCitations();
-  }, [user]); // This effect will run whenever the user changes
-  
-  
-
-
+  }, [user]);
 
   const handleLogout = async () => {
     const auth = getAuth(firebaseApp);
@@ -81,16 +80,178 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Basic ISBN validation
   const isISBN = (input) => {
-    // Basic ISBN validation (both ISBN-10 and ISBN-13)
-    return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ''));
-  };  
+    return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ""));
+  };
 
+  // ---- FILE UPLOAD FUNCTIONS (from main) ----
+  const handleFileChange = (e) => {
+    if (e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setUploadedFile(file);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
+  const uploadDocument = async () => {
+    if (!uploadedFile) return;
+
+    setIsLoading(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "user",
+        text: `Uploading document: ${uploadedFile.name}`,
+      },
+    ]);
+
+    const formData = new FormData();
+    formData.append("file", uploadedFile);
+
+    try {
+      const response = await axios.post("http://localhost:3002/api/upload-document", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(percentCompleted);
+        },
+      });
+
+      const documentData = response.data;
+
+      // Format the document analysis results
+      const formattedMessage = (
+        <div>
+          <h3>Document Analysis</h3>
+          <p>
+            <b>📄 File Name:</b> {documentData.file_name || uploadedFile.name}
+          </p>
+          <p>
+            <b>📋 File Type:</b>{" "}
+            {documentData.file_type || uploadedFile.name.split(".").pop()}
+          </p>
+
+          {documentData.metadata && (
+            <div>
+              <h4>Metadata</h4>
+              {documentData.metadata.title && (
+                <p>
+                  <b>Title:</b> {documentData.metadata.title}
+                </p>
+              )}
+              {documentData.metadata.authors && (
+                <div>
+                  <p>
+                    <b>Authors:</b>
+                  </p>
+                  <ul style={{ paddingLeft: "2rem" }}>
+                    {documentData.metadata.authors.map((author, idx) => (
+                      <li key={idx}>{author}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {documentData.metadata.abstract && (
+                <p>
+                  <b>Abstract:</b> {documentData.metadata.abstract}
+                </p>
+              )}
+              {documentData.metadata.keywords && (
+                <p>
+                  <b>Keywords:</b> {documentData.metadata.keywords.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
+          {documentData.citation_style && (
+            <p>
+              <b>Citation Style:</b> {documentData.citation_style}
+            </p>
+          )}
+
+          {documentData.references && documentData.references.length > 0 && (
+            <div className="references-container">
+              <h4 className="references-title">
+                References ({documentData.references.length})
+              </h4>
+              <ul className="references-list">
+                {documentData.references.map((ref, idx) => (
+                  <ReferenceItem
+                    key={idx}
+                    reference={{ unstructured: ref }}
+                    index={idx}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      );
+
+      setMessages((prev) => [...prev, { type: "bot", text: formattedMessage }]);
+
+      // Save to Firestore if there's valid metadata
+      if (
+        user &&
+        user.userID &&
+        documentData.metadata &&
+        documentData.metadata.title
+      ) {
+        await saveCitationToFirestore(
+          {
+            title: documentData.metadata.title,
+            authors: documentData.metadata.authors || [],
+            research_field: { field: "Document Upload" },
+            year: new Date().getFullYear().toString(),
+            doi: "N/A",
+            is_retracted: false,
+          },
+          user.userID
+        );
+      }
+
+      // Reset file input
+      setUploadedFile(null);
+      setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "bot",
+          text: "Error analyzing the document. Please check the file format and try again.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ---- END FILE UPLOAD FUNCTIONS ----
+
+  // Search a paper by DOI/Title/ISBN
   const searchPaper = async () => {
     if (input.trim() === "") return;
 
     if (input.trim().toLowerCase() === "clear") {
-      setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }]);
+      setMessages([
+        {
+          type: "bot",
+          text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
+        },
+      ]);
       setInput("");
       return;
     }
@@ -185,15 +346,18 @@ const Chat = () => {
     } catch (error) {
       setMessages((prev) => [
         ...prev,
-        { type: "bot", text: "Error analyzing paper. Please check the DOI and try again." },
+        {
+          type: "bot",
+          text: "Error analyzing paper. Please check the DOI and try again.",
+        },
       ]);
     } finally {
       setIsLoading(false);
       setInput("");
     }
   };
-  
 
+  // Save any paper-like object to Firestore
   const saveCitationToFirestore = async (paper, userID) => {
     if (!userID) return;
 
@@ -219,47 +383,86 @@ const Chat = () => {
       console.error("Error saving citation:", error);
     }
   };
-  
-  
-    const handleKeyPress = (e) => {
+
+  // Delete a citation by ID
+  const deleteCitation = async (citationId) => {
+    if (!user || !user.userID) return;
+    try {
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const citationDocRef = doc(userRef, "citations", citationId);
+      await deleteDoc(citationDocRef);
+      console.log("Citation deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting citation:", error);
+    }
+  };
+
+  // Press Enter to search
+  const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       searchPaper();
     }
   };
 
-  function Sidebar() {
-    const [isOpen, setIsOpen] = useState(true);  // State to manage whether the citations box is open or not
-  
-    const handleToggle = () => {
-      setIsOpen(!isOpen);  // Toggle the state
-    }};
-
-
   return (
     <>
       <NavigationHeader />
 
-  <Helmet>
-    <title>Research Paper Validator - VerifAI</title>
-    <meta name="description" content="Validate and cite research papers" />
-    <style>
-      {`
-        body {
-          margin-top: 6rem;
-          margin: 0;
-          padding: 0;
-          background-color: #E6E6FA;
-          height: 100vh;
-          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        }
-        @keyframes loading {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(400%); }
-        }
-      `}
-    </style>
-  </Helmet>
+      <Helmet>
+        <title>Research Paper Validator - VerifAI</title>
+        <meta name="description" content="Validate and cite research papers" />
+        <style>
+          {`
+            body {
+              margin-top: 6rem;
+              margin: 0;
+              padding: 0;
+              background-color: #E6E6FA;
+              height: 100vh;
+              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            }
+            @keyframes loading {
+              0% { transform: translateX(-100%); }
+              100% { transform: translateX(400%); }
+            }
+            .file-upload-container {
+              display: flex;
+              align-items: center;
+              margin-bottom: 1rem;
+            }
+            .file-upload-button {
+              background: #6E44FF;
+              color: white;
+              border: none;
+              padding: 0.5rem 1rem;
+              border-radius: 8px;
+              cursor: pointer;
+              font-size: 0.9rem;
+              margin-right: 0.5rem;
+            }
+            .file-name {
+              margin-left: 0.5rem;
+              font-size: 0.9rem;
+              color: #555;
+            }
+            .upload-progress {
+              height: 4px;
+              background: #f0f0f0;
+              border-radius: 2px;
+              margin-top: 0.5rem;
+              overflow: hidden;
+            }
+            .upload-progress-bar {
+              height: 100%;
+              background: #6E44FF;
+              border-radius: 2px;
+              transition: width 0.3s ease;
+            }
+          `}
+        </style>
+      </Helmet>
 
       <div
         style={{
@@ -456,60 +659,100 @@ const Chat = () => {
             )}
           </div>
 
-      {/* Search Bar */}
-      <div style={{
-        padding: "1rem",
-        borderTop: "1px solid #e5e5e5",
-        background: "white",
-      }}>
-        <div style={{
-          display: "flex",
-          gap: "0.5rem",
-          maxWidth: "800px",
-          margin: "0 auto",
-        }}>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Enter paper title, DOI, or ISBN..."
+          {/* Search Bar + File Upload Section */}
+          <div
             style={{
-              flex: 1,
-              padding: "0.75rem",
-              borderRadius: "8px",
-              border: "1px solid #e5e5e5",
-              fontSize: "1rem",
-              outline: "none",
-            }}
-          />
-          <button
-            onClick={searchPaper}
-            style={{
-              background: "#FF4D4D",
-              color: "white",
-              border: "none",
-              padding: "0.75rem 1.5rem",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "1rem",
-              transition: "background-color 0.3s ease",
+              padding: "1rem",
+              borderTop: "1px solid #e5e5e5",
+              background: "white",
             }}
           >
-            Search
-          </button>
+            {/* File Upload Controls */}
+            <div className="file-upload-container">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+                accept=".pdf,.docx,.txt"
+              />
+              <button className="file-upload-button" onClick={triggerFileInput}>
+                Upload Document
+              </button>
+
+              {uploadedFile && (
+                <>
+                  <span className="file-name">{uploadedFile.name}</span>
+                  <button
+                    className="file-upload-button"
+                    onClick={uploadDocument}
+                    style={{ marginLeft: "0.5rem" }}
+                  >
+                    Analyze
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Upload Progress Bar */}
+            {uploadProgress > 0 && uploadProgress < 100 && (
+              <div className="upload-progress">
+                <div
+                  className="upload-progress-bar"
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            )}
+
+            {/* Search Input for DOIs / Titles */}
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                maxWidth: "800px",
+                margin: "0 auto",
+              }}
+            >
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Enter paper title, DOI, or ISBN..."
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid #e5e5e5",
+                  fontSize: "1rem",
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={searchPaper}
+                style={{
+                  background: "#FF4D4D",
+                  color: "white",
+                  border: "none",
+                  padding: "0.75rem 1.5rem",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                  transition: "background-color 0.3s ease",
+                }}
+              >
+                Search
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-</>
-
-
+    </>
   );
 };
 
-// ---------------------------------------------------
-// ReferenceItem component for each reference
-// ---------------------------------------------------
+// ----------------------------------
+// ReferenceItem component
+// ----------------------------------
 const ReferenceItem = ({ reference, index, userID }) => {
   const [verificationStatus, setVerificationStatus] = useState(
     reference.verification_status || "pending"
@@ -532,7 +775,6 @@ const ReferenceItem = ({ reference, index, userID }) => {
     }
   };
 
-  // Save reference as a citation in Firestore
   const saveReferenceToFirestore = async (ref, userID) => {
     if (!userID) return; // Safety check
 
@@ -574,7 +816,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
       <div className="reference-header">
         <div className="reference-content">
           <p className="reference-title">
-            [{index + 1}] {reference.title || reference.unstructured || 'Untitled Reference'}
+            [{index + 1}] {reference.title || reference.unstructured || "Untitled Reference"}
           </p>
           {reference.authors && reference.authors.length > 0 && (
             <p className="reference-authors">
@@ -587,7 +829,11 @@ const ReferenceItem = ({ reference, index, userID }) => {
           {reference.doi && (
             <p className="reference-doi">
               DOI:{" "}
-              <a href={`https://doi.org/${reference.doi}`} target="_blank" rel="noopener noreferrer">
+              <a
+                href={`https://doi.org/${reference.doi}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 {reference.doi}
               </a>
             </p>
@@ -620,101 +866,99 @@ const ReferenceItem = ({ reference, index, userID }) => {
       </div>
 
       {/* Verification results */}
-      {results &&
-        verificationStatus !== "failed" &&
-        verificationStatus !== "pending" && (
-          <div className="results-container">
-            <p className="results-heading">Verification Results:</p>
+      {results && verificationStatus !== "failed" && verificationStatus !== "pending" && (
+        <div className="results-container">
+          <p className="results-heading">Verification Results:</p>
 
-            {results.crossref && results.crossref.length > 0 && (
-              <div className="results-section">
-                <p className="results-section-title">Found on CrossRef:</p>
-                <ul className="results-list">
-                  {results.crossref.map((item, idx) => (
-                    <li key={idx} className="results-item">
-                      <strong>{item.title}</strong>
-                      {item.publisher && <span> - {item.publisher}</span>}
-                      {item.year && <span> ({item.year})</span>}
-                      <br />
-                      <a
-                        href={`https://doi.org/${item.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        DOI: {item.doi}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          {results.crossref && results.crossref.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title">Found on CrossRef:</p>
+              <ul className="results-list">
+                {results.crossref.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <strong>{item.title}</strong>
+                    {item.publisher && <span> - {item.publisher}</span>}
+                    {item.year && <span> ({item.year})</span>}
+                    <br />
+                    <a
+                      href={`https://doi.org/${item.doi}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      DOI: {item.doi}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-            {results.arxiv && results.arxiv.length > 0 && (
-              <div className="results-section">
-                <p className="results-section-title">Found on ArXiv:</p>
-                <ul className="results-list">
-                  {results.arxiv.map((item, idx) => (
-                    <li key={idx} className="results-item">
-                      <a href={item.link} target="_blank" rel="noopener noreferrer">
-                        {item.title}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          {results.arxiv && results.arxiv.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title">Found on ArXiv:</p>
+              <ul className="results-list">
+                {results.arxiv.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <a href={item.link} target="_blank" rel="noopener noreferrer">
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-            {results.semantic_scholar && results.semantic_scholar.length > 0 && (
-              <div className="results-section">
-                <p className="results-section-title">Found on Semantic Scholar:</p>
-                <ul className="results-list">
-                  {results.semantic_scholar.map((item, idx) => (
-                    <li key={idx} className="results-item">
-                      <a
-                        href={`https://www.semanticscholar.org/paper/${item.paperId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {item.title}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          {results.semantic_scholar && results.semantic_scholar.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title">Found on Semantic Scholar:</p>
+              <ul className="results-list">
+                {results.semantic_scholar.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <a
+                      href={`https://www.semanticscholar.org/paper/${item.paperId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-            {results.retracted && results.retracted.length > 0 && (
-              <div className="results-section">
-                <p className="results-section-title retracted-title">
-                  Retraction Information:
-                </p>
-                <ul className="results-list">
-                  {results.retracted.map((item, idx) => (
-                    <li key={idx} className="results-item">
-                      <span className="retracted-title">{item.title}</span> -{" "}
-                      <a
-                        href={`https://doi.org/${item.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        DOI: {item.doi}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {((results.crossref && results.crossref.length === 0) &&
-              (results.arxiv && results.arxiv.length === 0) &&
-              (results.semantic_scholar && results.semantic_scholar.length === 0) &&
-              (results.retracted && results.retracted.length === 0)) && (
-              <p className="not-found-message">
-                This reference was not found in any of the searched databases.
+          {results.retracted && results.retracted.length > 0 && (
+            <div className="results-section">
+              <p className="results-section-title retracted-title">
+                Retraction Information:
               </p>
-            )}
-          </div>
-        )}
+              <ul className="results-list">
+                {results.retracted.map((item, idx) => (
+                  <li key={idx} className="results-item">
+                    <span className="retracted-title">{item.title}</span> -{" "}
+                    <a
+                      href={`https://doi.org/${item.doi}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      DOI: {item.doi}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {((results.crossref && results.crossref.length === 0) &&
+            (results.arxiv && results.arxiv.length === 0) &&
+            (results.semantic_scholar && results.semantic_scholar.length === 0) &&
+            (results.retracted && results.retracted.length === 0)) && (
+            <p className="not-found-message">
+              This reference was not found in any of the searched databases.
+            </p>
+          )}
+        </div>
+      )}
     </li>
   );
 };
