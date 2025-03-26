@@ -20,12 +20,15 @@ const Chat = () => {
   const [messages, setMessages] = useState([
     {
       type: "bot",
-      text: "Hello! Enter a paper title, DOI, or ISBN to get started.",
+      text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const user = useAuth(); // Retrieve the current user's UID
   const [citations, setCitations] = useState([]);
@@ -52,7 +55,11 @@ const Chat = () => {
     };
 
     fetchCitations();
-  }, [user]);
+  }, [user]); // This effect will run whenever the user changes
+  
+  
+
+
 
   const handleLogout = async () => {
     const auth = getAuth(firebaseApp);
@@ -74,13 +81,16 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
+  const isISBN = (input) => {
+    // Basic ISBN validation (both ISBN-10 and ISBN-13)
+    return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ''));
+  };  
+
   const searchPaper = async () => {
     if (input.trim() === "") return;
 
     if (input.trim().toLowerCase() === "clear") {
-      setMessages([
-        { type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." },
-      ]);
+      setMessages([{ type: "bot", text: "Hello! Enter a paper title, DOI, or ISBN to get started." }]);
       setInput("");
       return;
     }
@@ -182,6 +192,7 @@ const Chat = () => {
       setInput("");
     }
   };
+  
 
   const saveCitationToFirestore = async (paper, userID) => {
     if (!userID) return;
@@ -208,53 +219,47 @@ const Chat = () => {
       console.error("Error saving citation:", error);
     }
   };
-
-  // ------------- NEW: DELETE CITATION -------------
-  const deleteCitation = async (citationId) => {
-    if (!user || !user.userID) return;
-    try {
-      const db = getFirestore(firebaseApp);
-      const userRef = doc(db, "users", user.userID);
-      // doc path: users/{userID}/citations/{citationId}
-      const citationDocRef = doc(userRef, "citations", citationId);
-      await deleteDoc(citationDocRef);
-      console.log("Citation deleted successfully!");
-    } catch (error) {
-      console.error("Error deleting citation:", error);
-    }
-  };
-
-  const handleKeyPress = (e) => {
+  
+  
+    const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       searchPaper();
     }
   };
 
+  function Sidebar() {
+    const [isOpen, setIsOpen] = useState(true);  // State to manage whether the citations box is open or not
+  
+    const handleToggle = () => {
+      setIsOpen(!isOpen);  // Toggle the state
+    }};
+
+
   return (
     <>
       <NavigationHeader />
 
-      <Helmet>
-        <title>Research Paper Validator - VerifAI</title>
-        <meta name="description" content="Validate and cite research papers" />
-        <style>
-          {`
-            body {
-              margin-top: 6rem;
-              margin: 0;
-              padding: 0;
-              background-color: #E6E6FA;
-              height: 100vh;
-              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            }
-            @keyframes loading {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(400%); }
-            }
-          `}
-        </style>
-      </Helmet>
+  <Helmet>
+    <title>Research Paper Validator - VerifAI</title>
+    <meta name="description" content="Validate and cite research papers" />
+    <style>
+      {`
+        body {
+          margin-top: 6rem;
+          margin: 0;
+          padding: 0;
+          background-color: #E6E6FA;
+          height: 100vh;
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        }
+        @keyframes loading {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(400%); }
+        }
+      `}
+    </style>
+  </Helmet>
 
       <div
         style={{
@@ -451,61 +456,54 @@ const Chat = () => {
             )}
           </div>
 
-          {/* Search Bar */}
-          <div
+      {/* Search Bar */}
+      <div style={{
+        padding: "1rem",
+        borderTop: "1px solid #e5e5e5",
+        background: "white",
+      }}>
+        <div style={{
+          display: "flex",
+          gap: "0.5rem",
+          maxWidth: "800px",
+          margin: "0 auto",
+        }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Enter paper title, DOI, or ISBN..."
             style={{
-              padding: "1rem",
-              borderTop: "1px solid #e5e5e5",
-              background: "white",
+              flex: 1,
+              padding: "0.75rem",
+              borderRadius: "8px",
+              border: "1px solid #e5e5e5",
+              fontSize: "1rem",
+              outline: "none",
+            }}
+          />
+          <button
+            onClick={searchPaper}
+            style={{
+              background: "#FF4D4D",
+              color: "white",
+              border: "none",
+              padding: "0.75rem 1.5rem",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "1rem",
+              transition: "background-color 0.3s ease",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                maxWidth: "800px",
-                margin: "0 auto",
-              }}
-            >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    searchPaper();
-                  }
-                }}
-                placeholder="Enter paper title, DOI, or ISBN..."
-                style={{
-                  flex: 1,
-                  padding: "0.75rem",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e5e5",
-                  fontSize: "1rem",
-                  outline: "none",
-                }}
-              />
-              <button
-                onClick={searchPaper}
-                style={{
-                  background: "#FF4D4D",
-                  color: "white",
-                  border: "none",
-                  padding: "0.75rem 1.5rem",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                  transition: "background-color 0.3s ease",
-                }}
-              >
-                Search
-              </button>
-            </div>
-          </div>
+            Search
+          </button>
         </div>
       </div>
-    </>
+    </div>
+  </div>
+</>
+
+
   );
 };
 
@@ -576,7 +574,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
       <div className="reference-header">
         <div className="reference-content">
           <p className="reference-title">
-            [{index + 1}] {reference.title || reference.unstructured || "Untitled Reference"}
+            [{index + 1}] {reference.title || reference.unstructured || 'Untitled Reference'}
           </p>
           {reference.authors && reference.authors.length > 0 && (
             <p className="reference-authors">
