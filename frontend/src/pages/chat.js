@@ -610,7 +610,21 @@ const Chat = () => {
       // Format the document analysis results
       const formattedMessage = (
         <div>
-          <h3>Document Analysis</h3>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ margin: 0 }}>Document Analysis</h3>
+            <VerificationStatsButton 
+              references={documentData.references ? documentData.references.map(ref => ({ 
+                title: ref,
+                unstructured: ref 
+              })) : []} 
+              user={user}
+              saveReferenceToFirestore={saveCitationToFirestore}
+            />
+          </div>
           <p>
             <b>📄 File Name:</b> {documentData.file_name || uploadedFile.name}
           </p>
