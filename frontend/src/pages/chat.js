@@ -15,6 +15,7 @@ import axios from "axios";
 import NavigationHeader from "../components/NavigationHeader";
 import { useAuth } from "../contexts/authContext";
 import "../styles/ReferenceVerification.css";
+import { Pie } from "react-chartjs-2";
 
 const Chat = () => {
   const [messages, setMessages] = useState([
@@ -309,7 +310,10 @@ const Chat = () => {
 
       const formattedMessage = (
         <div>
-          <h3>Paper Details</h3>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <h3>Paper Details</h3>
+            <VerificationStatsButton references={paper.references || []} />
+          </div>
           <p>
             <b>📌 Title:</b> {paper.title}
           </p>
@@ -961,6 +965,237 @@ const ReferenceItem = ({ reference, index, userID }) => {
         </div>
       )}
     </li>
+  );
+};
+
+// Add this new component for the hover/click verification stats
+const VerificationStatsButton = ({ references }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [verificationStats, setVerificationStats] = useState({
+    verified: 0,
+    notVerified: 0,
+    unverifiable: 0,
+    unverifiableRefs: [],
+    loading: false
+  });
+
+  const verifyAllReferences = async () => {
+    setVerificationStats(prev => ({ ...prev, loading: true }));
+    
+    const verificationResults = await Promise.all(
+      references.map(async (reference) => {
+        try {
+          const response = await axios.post('http://localhost:3002/api/verify-reference', {
+            reference
+          });
+          return {
+            reference,
+            status: response.data.verification_status
+          };
+        } catch (error) {
+          console.error('Error verifying reference:', error);
+          return {
+            reference,
+            status: 'failed'
+          };
+        }
+      })
+    );
+
+    const stats = verificationResults.reduce((acc, { status, reference }) => {
+      if (status === 'verified') acc.verified++;
+      else if (status === 'not_found' || status === 'failed') {
+        acc.unverifiable++;
+        acc.unverifiableRefs.push(reference);
+      }
+      else acc.notVerified++;
+      return acc;
+    }, { verified: 0, notVerified: 0, unverifiable: 0, unverifiableRefs: [] });
+
+    setVerificationStats({ ...stats, loading: false });
+  };
+
+  const chartData = {
+    labels: ['Verified', 'Not Verified', 'Unverifiable'],
+    datasets: [{
+      data: [
+        verificationStats.verified,
+        verificationStats.notVerified,
+        verificationStats.unverifiable
+      ],
+      backgroundColor: [
+        'rgba(75, 192, 192, 0.6)',
+        'rgba(255, 206, 86, 0.6)',
+        'rgba(255, 99, 132, 0.6)'
+      ],
+      borderColor: [
+        'rgba(75, 192, 192, 1)',
+        'rgba(255, 206, 86, 1)',
+        'rgba(255, 99, 132, 1)'
+      ],
+      borderWidth: 1
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'bottom',
+      },
+      title: {
+        display: true,
+        text: 'Reference Verification Status',
+        color: '#333',
+        font: { size: 16 }
+      }
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onMouseEnter={() => {
+          setIsHovered(true);
+          if (!verificationStats.verified && !verificationStats.loading) {
+            verifyAllReferences();
+          }
+        }}
+        onMouseLeave={() => !isOpen && setIsHovered(false)}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          if (!verificationStats.verified && !verificationStats.loading) {
+            verifyAllReferences();
+          }
+        }}
+        style={{
+          background: '#6E44FF',
+          color: 'white',
+          border: 'none',
+          padding: '0.5rem',
+          borderRadius: '50%',
+          width: '30px',
+          height: '30px',
+          cursor: 'pointer',
+          marginLeft: '10px'
+        }}
+      >
+        📊
+      </button>
+
+      {/* Hover preview */}
+      {isHovered && !isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'white',
+          padding: '1rem',
+          borderRadius: '8px',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          zIndex: 1000,
+          width: '200px'
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            {verificationStats.loading ? (
+              <p>Verifying references...</p>
+            ) : (
+              <p>Click to see full verification details</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Full modal when clicked */}
+      {isOpen && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'white',
+          padding: '2rem',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          zIndex: 1000,
+          maxWidth: '600px',
+          width: '90%',
+          maxHeight: '80vh',
+          overflowY: 'auto'
+        }}>
+          <button
+            onClick={() => setIsOpen(false)}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              background: 'none',
+              border: 'none',
+              fontSize: '20px',
+              cursor: 'pointer'
+            }}
+          >
+            ✕
+          </button>
+
+          {verificationStats.loading ? (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <p>Verifying references...</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ maxWidth: '400px', margin: '0 auto' }}>
+                <Pie data={chartData} options={options} />
+              </div>
+              
+              <div style={{ marginTop: '2rem' }}>
+                <h4>Verification Summary</h4>
+                <p>Total References: {references.length}</p>
+                <p>Verified: {verificationStats.verified}</p>
+                <p>Not Verified: {verificationStats.notVerified}</p>
+                <p>Unverifiable: {verificationStats.unverifiable}</p>
+
+                {verificationStats.unverifiableRefs.length > 0 && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <h4>Unverifiable Citations:</h4>
+                    <ul style={{ 
+                      listStyle: 'none', 
+                      padding: 0,
+                      maxHeight: '200px',
+                      overflowY: 'auto'
+                    }}>
+                      {verificationStats.unverifiableRefs.map((ref, idx) => (
+                        <li key={idx} style={{
+                          padding: '0.5rem',
+                          margin: '0.5rem 0',
+                          background: '#fff5f5',
+                          borderRadius: '4px'
+                        }}>
+                          <strong>{ref.title || 'Untitled Reference'}</strong>
+                          {ref.authors && (
+                            <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}>
+                              Authors: {Array.isArray(ref.authors) ? ref.authors.join(', ') : ref.authors}
+                            </p>
+                          )}
+                          {ref.year && <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}>Year: {ref.year}</p>}
+                          {ref.doi && (
+                            <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}>
+                              DOI: <a href={`https://doi.org/${ref.doi}`} target="_blank" rel="noopener noreferrer">{ref.doi}</a>
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
