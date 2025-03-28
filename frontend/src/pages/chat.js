@@ -853,15 +853,16 @@ const ReferenceItem = ({ reference, index, userID }) => {
             </button>
           )}
 
-          {/* Save Button */}
-          <button
-            onClick={() => saveReferenceToFirestore(reference, userID)}
-            className="save-button"
-            disabled={!userID}
-            style={{ marginTop: "0.5rem" }}
-          >
-            Save
-          </button>
+          {/* Save Button (only if verified) */}
+          {verificationStatus === "verified" && (
+            <button
+              onClick={() => saveReferenceToFirestore(reference, userID)}
+              className="verify-button"
+              disabled={!userID}
+            >
+              Save
+            </button>
+          )}
         </div>
       </div>
 
