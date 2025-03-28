@@ -10,6 +10,7 @@ import {
   addDoc,
   onSnapshot,
   deleteDoc,
+  getDocs,
 } from "firebase/firestore";
 import axios from "axios";
 import NavigationHeader from "../components/NavigationHeader";
@@ -21,7 +22,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const VerificationStatsButton = ({ references }) => {
+const VerificationStatsButton = ({ references, user, saveReferenceToFirestore }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [verificationStats, setVerificationStats] = useState({
@@ -31,11 +32,12 @@ const VerificationStatsButton = ({ references }) => {
     unverifiableRefs: [],
     loading: false
   });
+  const [verificationResults, setVerificationResults] = useState([]);
 
   const verifyAllReferences = async () => {
     setVerificationStats(prev => ({ ...prev, loading: true }));
     
-    const verificationResults = await Promise.all(
+    const results = await Promise.all(
       references.map(async (reference) => {
         try {
           const response = await axios.post('http://localhost:3002/api/verify-reference', {
@@ -55,7 +57,9 @@ const VerificationStatsButton = ({ references }) => {
       })
     );
 
-    const stats = verificationResults.reduce((acc, { status, reference }) => {
+    setVerificationResults(results);
+
+    const stats = results.reduce((acc, { status, reference }) => {
       if (status === 'verified') acc.verified++;
       else if (status === 'not_found' || status === 'failed') {
         acc.unverifiable++;
@@ -90,6 +94,35 @@ const VerificationStatsButton = ({ references }) => {
     }]
   };
 
+  const handleChartClick = async (event, elements) => {
+    if (!elements || !elements.length) return;
+    
+    const clickedIndex = elements[0].index;
+    // 0 = Verified, 1 = Not Verified, 2 = Unverifiable
+    if (clickedIndex === 0) { // Only handle clicks on the "Verified" section
+      const verifiedRefs = references.filter((ref) => {
+        const result = verificationResults.find(vr => 
+          vr.reference.title === ref.title && 
+          vr.reference.doi === ref.doi
+        );
+        return result && result.status === 'verified';
+      });
+      
+      // Save all verified references to Firestore
+      for (const ref of verifiedRefs) {
+        const citationData = {
+          title: ref.title || "Untitled Reference",
+          authors: ref.authors || [],
+          year: ref.year || null,
+          doi: ref.doi || null,
+          research_field: { field: "Reference" },
+          is_retracted: false
+        };
+        await saveReferenceToFirestore(citationData, user.userID);
+      }
+    }
+  };
+
   const options = {
     responsive: true,
     plugins: {
@@ -102,7 +135,8 @@ const VerificationStatsButton = ({ references }) => {
         color: '#333',
         font: { size: 16 }
       }
-    }
+    },
+    onClick: handleChartClick
   };
 
   return (
@@ -758,10 +792,14 @@ const Chat = () => {
           <div style={{ 
             display: 'flex', 
             alignItems: 'center',
-            marginBottom: '1rem'  // Add some spacing below
+            marginBottom: '1rem'
           }}>
             <h3 style={{ margin: 0 }}>Paper Details</h3>
-            <VerificationStatsButton references={paper.references || []} />
+            <VerificationStatsButton 
+              references={paper.references || []} 
+              user={user}
+              saveReferenceToFirestore={saveCitationToFirestore}
+            />
           </div>
           <p>
             <b>📌 Title:</b> {paper.title}
@@ -792,10 +830,6 @@ const Chat = () => {
 
       setMessages((prev) => [...prev, { type: "bot", text: formattedMessage }]);
 
-      // Save main paper details to Firestore
-      if (user && user.userID) {
-        await saveCitationToFirestore(paper, user.userID);
-      }
     } catch (error) {
       setMessages((prev) => [
         ...prev,
@@ -856,6 +890,29 @@ const Chat = () => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       searchPaper();
+    }
+  };
+
+  const deleteAllCitations = async () => {
+    if (!user || !user.userID) return;
+    
+    try {
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const citationsRef = collection(userRef, "citations");
+      
+      // Get all citations
+      const snapshot = await getDocs(citationsRef);
+      
+      // Delete each citation
+      const deletePromises = snapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      await Promise.all(deletePromises);
+      console.log("All citations deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting all citations:", error);
     }
   };
 
@@ -946,10 +1003,9 @@ const Chat = () => {
           <div
             style={{
               display: "flex",
-              alignItems: "center",
               justifyContent: "space-between",
-              borderBottom: "2px solid white",
-              paddingBottom: "0.5rem",
+              alignItems: "center",
+              marginBottom: "1rem"
             }}
           >
             <h1
@@ -966,6 +1022,22 @@ const Chat = () => {
             >
               Citations
             </h1>
+            {citations.length > 0 && (
+              <button
+                onClick={deleteAllCitations}
+                style={{
+                  backgroundColor: "#dc3545",
+                  color: "white",
+                  border: "none",
+                  padding: "0.4rem 0.8rem",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontSize: "0.8rem"
+                }}
+              >
+                Delete All
+              </button>
+            )}
           </div>
 
           <div
