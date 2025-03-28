@@ -46,13 +46,6 @@ Thumbs.db
 #database private key
 #backend/firebase-adminsdk.json
 
-#package locks
-package.json
-package-lock.json
-frontend/package.json
-frontend/package-lock.json
-backend/package.json
-backend/package-lock.json
 
 # Environment variables
 .env
