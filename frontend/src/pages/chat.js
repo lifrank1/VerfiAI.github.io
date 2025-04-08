@@ -23,6 +23,7 @@ import axios from "axios";
 import NavigationHeader from "../components/NavigationHeader";
 import { useAuth } from "../contexts/authContext";
 import "../styles/ReferenceVerification.css";
+import "../styles/Chat.css";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import ReactDOMServer from 'react-dom/server';
@@ -579,6 +580,11 @@ const Chat = () => {
   const [showNewChatInput, setShowNewChatInput] = useState(false);
   const [newChatTitle, setNewChatTitle] = useState('');
   
+  // Add missing state variables for title editing
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [activeChatTitle, setActiveChatTitle] = useState('New Chat');
+  
   const [messages, setMessages] = useState([
     {
       type: "bot",
@@ -661,6 +667,7 @@ const Chat = () => {
       if (!activeChatId && sessionsData.length > 0) {
         console.log("Selecting first chat session:", sessionsData[0].id);
         setActiveChatId(sessionsData[0].id);
+        setActiveChatTitle(sessionsData[0].title || "Untitled Chat");
       }
     });
 
@@ -670,10 +677,16 @@ const Chat = () => {
   // Load messages when active chat changes
   useEffect(() => {
     if (user && user.userID && activeChatId) {
+      // Update the active chat title
+      const activeChat = chatSessions.find(chat => chat.id === activeChatId);
+      if (activeChat) {
+        setActiveChatTitle(activeChat.title || "Untitled Chat");
+      }
+      
       loadChatMessages();
       loadChatCitations();
     }
-  }, [user, user?.userID, activeChatId]);
+  }, [user, user?.userID, activeChatId, chatSessions]);
 
   // Load messages for the active chat session
   const loadChatMessages = async () => {
@@ -735,6 +748,34 @@ const Chat = () => {
       setCitations(citationsData);
     } catch (error) {
       console.error("Error loading chat citations:", error);
+    }
+  };
+
+  // Functions for chat title editing
+  const handleEditTitleClick = () => {
+    const activeChat = chatSessions.find(chat => chat.id === activeChatId);
+    if (activeChat) {
+      setEditTitle(activeChat.title || 'Untitled');
+      setActiveChatTitle(activeChat.title || 'Untitled');
+    }
+    setIsEditingTitle(true);
+  };
+
+  const handleTitleUpdate = () => {
+    if (editTitle.trim() !== '') {
+      if (activeChatId) {
+        renameChatSession(activeChatId, editTitle.trim());
+        setActiveChatTitle(editTitle.trim());
+      }
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleTitleUpdate();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
     }
   };
 
@@ -1156,389 +1197,241 @@ const Chat = () => {
 
   // UI for the three-panel layout
   return (
-    <>
-      <NavigationHeader />
-
-      <Helmet>
-        <title>Research Paper Validator - VerifAI</title>
-        <meta name="description" content="Validate and cite research papers" />
-        <style>
-          {/* CSS styles here */}
-        </style>
-      </Helmet>
-
-      <ChatContext.Provider value={{ activeChatId }}>
-        <div className="chat-container">
-          {/* Chat History Sidebar */}
-          <div
-            style={{
-              width: "250px",
-              borderRight: "1px solid #e0e0e0",
-              display: "flex",
-              flexDirection: "column",
-              background: "#f7f7f7",
-            }}
-          >
-            <div
-              style={{
-                padding: "15px",
-                paddingTop: "20px",
-                borderBottom: "1px solid #e0e0e0",
-                display: "flex",
-                justifyContent: "space-between",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Chat History</h3>
-              <button
-                onClick={() => setShowNewChatInput(!showNewChatInput)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "20px",
-                }}
-              >
-                +
-              </button>
-            </div>
-
-            {/* New Chat Input */}
-            {showNewChatInput && (
-              <div style={{ padding: "10px", borderBottom: "1px solid #e0e0e0" }}>
-                <input
-                  type="text"
-                  value={newChatTitle}
-                  onChange={(e) => setNewChatTitle(e.target.value)}
-                  placeholder="Enter chat title"
-                  style={{
-                    width: "70%",
-                    padding: "8px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
-                  }}
-                />
-                <button
-                  onClick={() => createNewChatSession(newChatTitle || "Untitled")}
-                  style={{
-                    marginLeft: "5px",
-                    padding: "8px",
-                    background: "#4CAF50",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
+    <ChatContext.Provider value={{ activeChatId }}>
+      <div className="chat-container">
+        <Helmet>
+          <title>VerifAI - Chat</title>
+        </Helmet>
+        
+        <NavigationHeader user={user} />
+        
+        <div className="chat-interface">
+          <div className="sidebar">
+            <div className="new-chat-section">
+              {showNewChatInput ? (
+                <div className="new-chat-input-container">
+                  <input
+                    type="text"
+                    placeholder="Enter chat title..."
+                    value={newChatTitle}
+                    onChange={(e) => setNewChatTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        createNewChatSession(newChatTitle || "Untitled");
+                      } else if (e.key === 'Escape') {
+                        setShowNewChatInput(false);
+                        setNewChatTitle('');
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button 
+                    onClick={() => createNewChatSession(newChatTitle || "Untitled")}
+                    className="chat-action-button"
+                  >
+                    Create
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowNewChatInput(false);
+                      setNewChatTitle('');
+                    }}
+                    className="chat-action-button cancel"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setShowNewChatInput(true)}
+                  className="new-chat-button"
                 >
-                  Create
+                  <span>+</span> New Chat
                 </button>
-              </div>
-            )}
-
-            {/* Chat Sessions List */}
-            <div style={{ flex: 1, overflowY: "auto" }}>
+              )}
+            </div>
+            
+            <div className="chat-sessions-list">
               {chatSessions.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => setActiveChatId(chat.id)}
-                  style={{
-                    padding: "12px 15px",
-                    cursor: "pointer",
-                    borderBottom: "1px solid #eee",
-                    background: activeChatId === chat.id ? "#e1f5fe" : "transparent",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
+                <div 
+                  key={chat.id} 
+                  className={`chat-session-item ${chat.id === activeChatId ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveChatId(chat.id);
+                    setActiveChatTitle(chat.title || "Untitled Chat");
                   }}
                 >
-                  <div style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {chat.title}
+                  <div className="chat-session-title">
+                    {chat.title || "Untitled Chat"}
                   </div>
-                  <button
+                  <button 
+                    className="delete-chat-button"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteChatSession(chat.id);
-                    }}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#999",
-                      cursor: "pointer",
-                      fontSize: "16px",
                     }}
                   >
                     ×
                   </button>
                 </div>
               ))}
-              {chatSessions.length === 0 && (
-                <div style={{ padding: "15px", color: "#666", textAlign: "center" }}>
-                  No chat sessions yet
-                </div>
-              )}
-            </div>
-
-            {/* User Controls */}
-            <div
-              style={{
-                padding: "15px",
-                borderTop: "1px solid #e0e0e0",
-                display: "flex",
-                justifyContent: "center",
-              }}
-            >
-              {user && user.userID ? (
-                <button
-                  onClick={() => {
-                    user.logout();
-                    navigate("/");
-                  }}
-                  style={{
-                    padding: "8px 15px",
-                    background: "#f44336",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Logout
-                </button>
-              ) : (
-                <button
-                  onClick={() => navigate("/login")}
-                  style={{
-                    padding: "8px 15px",
-                    background: "#2196F3",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Login
-                </button>
-              )}
             </div>
           </div>
-
-          {/* Citations Sidebar */}
-          <div
-            style={{
-              width: "300px",
-              borderRight: "1px solid #e0e0e0",
-              overflowY: "auto",
-              background: "#fcfcfc",
-            }}
-          >
-            <div
-              style={{
-                padding: "15px",
-                paddingTop: "20px",
-                borderBottom: "1px solid #e0e0e0",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>Saved Citations</h3>
+          
+          <div className="chat-main">
+            <div className="chat-header">
+              {isEditingTitle ? (
+                <div className="edit-title-container">
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onBlur={handleTitleUpdate}
+                    onKeyDown={handleTitleKeyDown}
+                    autoFocus
+                    className="edit-title-input"
+                  />
+                </div>
+              ) : (
+                <div className="chat-title" onClick={handleEditTitleClick}>
+                  {activeChatTitle || "New Chat"}
+                  <span className="edit-icon">✎</span>
+                </div>
+              )}
             </div>
             
-            <div className="citations-container">
-              {citations.length === 0 ? (
-                <p className="no-citations">No citations saved yet.</p>
-              ) : (
-                <ul className="citations-list">
-                  {citations.map((citation, index) => (
-                    <li key={citation.id} className="citation-item">
-                      <h4>{citation.title}</h4>
-                      {citation.authors && (
-                        <p>Authors: {Array.isArray(citation.authors) ? citation.authors.join(", ") : citation.authors}</p>
-                      )}
-                      {citation.year && <p>Year: {citation.year}</p>}
-                      {citation.doi && (
-                        <p>
-                          DOI:{" "}
-                          <a
-                            href={`https://doi.org/${citation.doi}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {citation.doi}
-                          </a>
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          {/* Main Chat Area */}
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              height: "100%",
-            }}
-          >
-            {/* Chat Messages */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                padding: "20px",
-                background: "#fff",
-              }}
-            >
+            <div className="messages-container">
               {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`message-container ${message.type === "user" ? "user-message" : "bot-message"}`}
-                >
-                  <div className="message-avatar">
-                    {message.type === "user" ? "👤" : "🤖"}
-                  </div>
-                  <div className="message-content">
-                    {typeof message.text === 'string' ? (
-                      message.text
-                    ) : (
-                      // For JSX elements or objects
-                      message.text
-                    )}
-                  </div>
+                <div key={index} className={`message ${message.type}`}>
+                  <div className="message-content">{message.text}</div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
+              
               {isLoading && (
-                <div className="message-container bot-message">
-                  <div className="message-avatar">🤖</div>
+                <div className="message bot">
                   <div className="message-content">
-                    <div className="typing-indicator">
-                      <span></span>
-                      <span></span>
-                      <span></span>
+                    <div className="loading-indicator">
+                      <div className="dot"></div>
+                      <div className="dot"></div>
+                      <div className="dot"></div>
                     </div>
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
             </div>
-
-            {/* Input Area */}
-            <div
-              style={{
-                borderTop: "1px solid #e0e0e0",
-                padding: "15px",
-                background: "#f7f7f7",
-              }}
-            >
-              <form onSubmit={searchPaper} style={{ display: "flex", gap: "10px" }}>
+            
+            <div className="chat-controls">
+              <form onSubmit={searchPaper} className="input-form">
                 <input
                   type="text"
                   value={input}
                   onChange={handleInputChange}
+                  placeholder="Enter DOI, ArXiv ID, or paper title..."
+                  className="chat-input"
                   disabled={isLoading}
-                  placeholder="Enter paper title, DOI, or ISBN..."
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    border: "1px solid #ddd",
-                    borderRadius: "4px",
-                    fontSize: "16px",
-                  }}
                 />
+                
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  style={{
-                    padding: "12px 20px",
-                    background: "#2196F3",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontSize: "16px",
-                  }}
+                  className="send-button"
+                  disabled={isLoading || !input.trim()}
                 >
                   Search
                 </button>
-              </form>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: "10px",
-                }}
-              >
-                <div>
+                
+                <div className="upload-container">
                   <input
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileChange}
                     style={{ display: "none" }}
-                    accept=".pdf,.doc,.docx"
+                    accept=".pdf,.docx,.doc,.txt"
                   />
+                  
                   <button
+                    type="button"
                     onClick={handleFileButtonClick}
-                    style={{
-                      padding: "8px 15px",
-                      background: "#4CAF50",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                    }}
+                    className="upload-button"
+                    disabled={isLoading}
                   >
-                    Choose File
+                    📁
                   </button>
-                  <span style={{ marginLeft: "10px" }}>
-                    {uploadedFile ? uploadedFile.name : "No file chosen"}
-                  </span>
+                  
+                  {uploadedFile && (
+                    <div className="upload-info">
+                      <span className="filename">{uploadedFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={uploadDocument}
+                        className="upload-submit"
+                        disabled={isLoading}
+                      >
+                        Upload
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUploadedFile(null)}
+                        className="upload-cancel"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={uploadDocument}
-                  disabled={!uploadedFile || isLoading}
-                  style={{
-                    padding: "8px 15px",
-                    background: uploadedFile ? "#4CAF50" : "#ccc",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: uploadedFile ? "pointer" : "not-allowed",
-                  }}
-                >
-                  Upload & Analyze
-                </button>
-              </div>
-
+              </form>
+              
               {uploadProgress > 0 && uploadProgress < 100 && (
-                <div style={{ marginTop: "10px" }}>
+                <div className="upload-progress">
                   <div
-                    style={{
-                      height: "8px",
-                      width: "100%",
-                      backgroundColor: "#e0e0e0",
-                      borderRadius: "4px",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${uploadProgress}%`,
-                        backgroundColor: "#4CAF50",
-                      }}
-                    ></div>
-                  </div>
-                  <div style={{ textAlign: "center", marginTop: "5px" }}>
-                    {uploadProgress}%
-                  </div>
+                    className="progress-bar"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
                 </div>
               )}
             </div>
           </div>
+          
+          <div className="citations-panel">
+            <h3>Your Saved Citations</h3>
+            {citations.length > 0 ? (
+              <ul className="citations-list">
+                {citations.map((citation, index) => (
+                  <li key={citation.id} className="citation-item">
+                    <div className="citation-title">{citation.title}</div>
+                    {citation.authors && (
+                      <div className="citation-authors">
+                        {Array.isArray(citation.authors)
+                          ? citation.authors.join(", ")
+                          : citation.authors}
+                      </div>
+                    )}
+                    {citation.year && (
+                      <div className="citation-year">{citation.year}</div>
+                    )}
+                    {citation.doi && (
+                      <div className="citation-doi">
+                        <a
+                          href={`https://doi.org/${citation.doi}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {citation.doi}
+                        </a>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="empty-citations">
+                No citations saved yet. Verify references and click "Save" to add them here.
+              </p>
+            )}
+          </div>
         </div>
-      </ChatContext.Provider>
-    </>
+      </div>
+    </ChatContext.Provider>
   );
 };
 

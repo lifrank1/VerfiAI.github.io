@@ -244,6 +244,123 @@ app.post('/api/analyze-paper', async (req, res) => {
   });
 });
 
+// 🔹 API: Search Paper by Title
+app.post('/api/search-paper', async (req, res) => {
+  const { title } = req.body;
+  console.log('Searching for paper with title:', title);
+
+  // Determine the correct Python command based on your environment
+  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+  
+  // Use check_paper.py which has search capabilities for arXiv, Semantic Scholar, and CrossRef
+  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', title]);
+  let data = '';
+  let errorData = '';
+
+  pythonProcess.stdout.on('data', (chunk) => {
+    data += chunk;
+    console.log('Python output:', chunk.toString());
+  });
+
+  pythonProcess.stderr.on('data', (chunk) => {
+    errorData += chunk;
+    console.error('Python error:', chunk.toString());
+  });
+
+  pythonProcess.on('close', async (code) => {
+    if (code !== 0) {
+      return res.status(500).json({ error: 'Failed to search for paper', details: errorData });
+    }
+    try {
+      const results = JSON.parse(data);
+      console.log('Parsed search results:', results);
+      
+      // Check if we found any papers
+      const foundResults = results.arxiv.length > 0 || 
+                           results.semantic_scholar.length > 0 || 
+                           results.crossref.length > 0;
+      
+      if (!foundResults) {
+        return res.status(404).json({ success: false, error: 'No papers found matching that title' });
+      }
+      
+      // Return the first result found, prioritizing CrossRef, then Semantic Scholar, then arXiv
+      let paperId = null;
+      let bestResult = null;
+      
+      if (results.crossref.length > 0) {
+        bestResult = {
+          title: results.crossref[0].title,
+          doi: results.crossref[0].doi,
+          authors: results.crossref[0].authors || [],
+          year: results.crossref[0].year,
+          is_retracted: results.retracted.length > 0
+        };
+      } else if (results.semantic_scholar.length > 0) {
+        paperId = results.semantic_scholar[0].paperId;
+        bestResult = {
+          title: results.semantic_scholar[0].title,
+          doi: null,
+          authors: [],
+          is_retracted: results.retracted.length > 0
+        };
+      } else if (results.arxiv.length > 0) {
+        bestResult = {
+          title: results.arxiv[0].title,
+          doi: null,
+          authors: [],
+          is_retracted: results.retracted.length > 0
+        };
+      }
+      
+      // If we found a DOI and it's from CrossRef, try to get full paper details
+      if (bestResult.doi) {
+        try {
+          // Try to get more details using doi_citation.py
+          const detailProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', bestResult.doi]);
+          let detailData = '';
+          
+          detailProcess.stdout.on('data', (chunk) => {
+            detailData += chunk;
+          });
+          
+          await new Promise((resolve) => {
+            detailProcess.on('close', () => {
+              resolve();
+            });
+          });
+          
+          try {
+            const detailResult = JSON.parse(detailData);
+            if (detailResult.success && detailResult.paper) {
+              res.json(detailResult);
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing detailed paper data:', e);
+          }
+        } catch (detailError) {
+          console.error('Error getting detailed paper info:', detailError);
+        }
+      }
+      
+      // If we couldn't get detailed info, return the basic search result
+      res.json({ 
+        success: true, 
+        paper: bestResult,
+        results: {
+          arxiv: results.arxiv,
+          semantic_scholar: results.semantic_scholar,
+          crossref: results.crossref,
+          retracted: results.retracted
+        }
+      });
+    } catch (e) {
+      res.status(500).json({ error: 'Invalid JSON response', details: e.message });
+    }
+  });
+});
+
 // 🔹 API: Get ISBN Citation
 app.post("/api/isbn-citation", async (req, res) => {
   const { isbn } = req.body;
