@@ -194,7 +194,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
+  padding: 0.6rem 2rem;
   background-color: #fff;
   position: fixed;
   top: 0;
@@ -202,6 +202,7 @@ html, body {
   right: 0;
   z-index: 10;
   width: 100%;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 
 .nav-container {
@@ -211,18 +212,18 @@ html, body {
 }
 
 .logo {
-  margin-left:3rem;
-  margin-right: 5rem;
+  margin-left: 2rem;
+  margin-right: 4rem;
 }
 
 .logo-img {
-  width: 5rem;
+  width: 4rem;
   height: auto;
   object-fit: contain;
 }
 
 .nav-links {
-  margin-top:1rem;
+  margin-top: 0.5rem;
   display: flex;
   gap: 4.5rem;
 }
