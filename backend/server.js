@@ -208,6 +208,54 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+// Helper function to safely parse JSON responses
+const safeJsonParse = (data) => {
+  try {
+    // Clean the string by removing any malformed parts
+    let cleanedData = data;
+    
+    // Try to clean up potential JSON syntax issues in references
+    if (cleanedData.includes('"doi": "10.1109/ICCV')) {
+      cleanedData = cleanedData.replace(/("doi": "10\.1109\/ICCV[^"]*)"(\s*)"year"/, '$1","year');
+    }
+    
+    // Try to fix any JSON where a value is missing quotes
+    cleanedData = cleanedData.replace(/([{,]\s*"[^"]+"\s*:\s*)([^"{}\[\],\s][^{}\[\],]*[^"{}\[\],\s])(\s*[},])/g, '$1"$2"$3');
+    
+    // Clean up any trailing commas in arrays or objects
+    cleanedData = cleanedData.replace(/,(\s*[\]}])/g, '$1');
+    
+    return JSON.parse(cleanedData);
+  } catch (e) {
+    console.error('❌ Error parsing JSON:', e);
+    // Only show the problematic part of the JSON to avoid console flooding
+    const preview = data.length > 500 ? 
+      data.substring(0, 200) + '...[truncated]...' + data.substring(data.length - 300) : 
+      data;
+    console.error('❌ JSON preview:', preview);
+    
+    // Find potential error locations with a regex check
+    const suspiciousPatterns = [
+      { pattern: /"year":\s*([^"}0-9][^"},\]]*[^"}0-9\s])\s*[,}]/, description: "Malformed year value" },
+      { pattern: /"doi":\s*"([^"]*?)"\s*"/, description: "Missing comma after DOI" },
+      { pattern: /,\s*}/, description: "Trailing comma in object" },
+      { pattern: /,\s*\]/, description: "Trailing comma in array" },
+      { pattern: /"([^"]*?)\\/, description: "Unescaped backslash in string" },
+      { pattern: /"[^"]*?$/, description: "Unterminated string" }
+    ];
+    
+    suspiciousPatterns.forEach(({pattern, description}) => {
+      const match = pattern.exec(data);
+      if (match) {
+        const context = data.substring(Math.max(0, match.index - 20), Math.min(data.length, match.index + 20));
+        console.error(`❌ Potential JSON error (${description}) around: ...${context}...`);
+      }
+    });
+    
+    throw new Error(`Invalid JSON: ${e.message}`);
+  }
+};
+
 // 🔹 API: Analyze Paper using DOI
 app.post('/api/analyze-paper', async (req, res) => {
   console.log('📌 API: Analyze Paper - Request body:', JSON.stringify(req.body));
@@ -233,14 +281,24 @@ app.post('/api/analyze-paper', async (req, res) => {
   let data = '';
   let errorData = '';
 
+  // Now stdout should only contain the JSON response, while stderr will have debug info
   pythonProcess.stdout.on('data', (chunk) => {
     data += chunk;
-    console.log('📌 Python output chunk:', chunk.toString());
+    console.log('📌 Python stdout (JSON data) received');
   });
 
+  // Debug information now comes through stderr, but we don't treat it as errors
   pythonProcess.stderr.on('data', (chunk) => {
-    errorData += chunk;
-    console.error('❌ Python error:', chunk.toString());
+    // Capture the debug output for logging, but don't treat it as an error
+    const debugOutput = chunk.toString();
+    if (debugOutput.includes('❌')) {
+      // Only log actual errors
+      console.error('❌ Python error or warning:', debugOutput);
+      errorData += debugOutput;
+    } else {
+      // Log debug info at debug level
+      console.log('🔍 Python debug:', debugOutput.trim());
+    }
   });
 
   pythonProcess.on('close', async (code) => {
@@ -253,14 +311,52 @@ app.post('/api/analyze-paper', async (req, res) => {
     }
     
     try {
-      console.log('📌 Raw data from Python:', data);
-      const result = JSON.parse(data);
-      console.log('📌 Parsed result:', result);
+      // Data should now be clean JSON without any debug statements
+      let result;
+      try {
+        // Try parsing the output directly - it should now be pure JSON
+        result = JSON.parse(data.trim());
+        console.log('📌 Parsed JSON successfully');
+      } catch (jsonError) {
+        console.error('❌ JSON parse error:', jsonError);
+        
+        // If parsing failed, use our safe parsing helper as a fallback
+        try {
+          result = safeJsonParse(data);
+          console.log('📌 Parsed JSON using safeJsonParse fallback');
+        } catch (fallbackError) {
+          // If JSON parsing fails even with our helper, check for error response pattern
+          if (data.includes('"success": false') && data.includes('"error":')) {
+            // Try to extract the error message using regex
+            const errorMatch = /"error"\s*:\s*"([^"]+)"/.exec(data);
+            if (errorMatch && errorMatch[1]) {
+              return res.status(400).json({ 
+                success: false, 
+                error: errorMatch[1]
+              });
+            }
+          }
+          
+          // Show helpful error details
+          console.error('❌ Complete JSON parse failure:', fallbackError);
+          const preview = data.length > 200 ? 
+            data.substring(0, 100) + '...' + data.substring(data.length - 100) : 
+            data;
+          console.error('❌ Raw data preview:', preview);
+          
+          return res.status(500).json({ 
+            success: false, 
+            error: 'Invalid JSON response', 
+            details: fallbackError.message
+          });
+        }
+      }
+      
+      console.log('📌 Returning result to client');
       res.json(result);
     } catch (e) {
-      console.error('❌ JSON parse error:', e);
-      console.error('❌ Raw data that failed to parse:', data);
-      res.status(500).json({ success: false, error: 'Invalid JSON response', details: e.message });
+      console.error('❌ General error in response handling:', e);
+      res.status(500).json({ success: false, error: 'Error processing response', details: e.message });
     }
   });
 });
