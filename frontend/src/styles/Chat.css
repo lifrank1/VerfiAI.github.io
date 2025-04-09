@@ -5,12 +5,14 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  padding-top: 60px; /* Add padding to match navbar height */
 }
 
 .chat-interface {
   display: flex;
   flex: 1;
   overflow: hidden;
+  height: calc(100vh - 60px); /* Adjust height to account for navbar */
 }
 
 /* Sidebar Styles */
