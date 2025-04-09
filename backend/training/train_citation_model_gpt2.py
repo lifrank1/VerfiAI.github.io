@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 import argparse
 import json
-import os
-import torch
 from transformers import (
     GPT2LMHeadModel,
     GPT2Tokenizer,
@@ -26,7 +24,8 @@ class CitationDataset(Dataset):
 
     def __getitem__(self, idx):
         item = self.examples[idx]
-        # Combine the input prompt and target citation.
+        # For GPT-2, combine the prompt and target citation into one sequence.
+        # You can choose a separator if desired; here we just put a space.
         text = item["input"] + " " + item["target"]
         encoding = self.tokenizer(
             text,
@@ -41,12 +40,12 @@ class CitationDataset(Dataset):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Fine-tune GPT-2 for citation generation, apply dynamic quantization on CPU, and save the model (Hugging Face format)."
+        description="Fine-tune GPT-2 for citation generation."
     )
     parser.add_argument("--train_file", type=str, required=True, help="Path to the training data (JSONL format).")
     parser.add_argument("--eval_file", type=str, default=None, help="Path to the evaluation data (JSONL format).")
     parser.add_argument("--model_name_or_path", type=str, default="gpt2", help="Pretrained GPT-2 model name or path.")
-    parser.add_argument("--output_dir", type=str, default="./citation_gpt2_model", help="Directory where the fine-tuned & quantized model will be saved.")
+    parser.add_argument("--output_dir", type=str, default="./citation_gpt2_model", help="Directory where the fine-tuned model will be saved.")
     parser.add_argument("--num_train_epochs", type=int, default=3, help="Number of training epochs.")
     parser.add_argument("--per_device_train_batch_size", type=int, default=4, help="Batch size per device during training.")
     parser.add_argument("--per_device_eval_batch_size", type=int, default=4, help="Batch size per device during evaluation.")
@@ -56,14 +55,17 @@ def main():
 
     print("Loading GPT-2 tokenizer and model...")
     tokenizer = GPT2Tokenizer.from_pretrained(args.model_name_or_path)
-    # GPT-2 doesn't have a pad token by default; use the EOS token.
+    # GPT-2 doesn't have a pad token; set it to the EOS token.
     tokenizer.pad_token = tokenizer.eos_token
     model = GPT2LMHeadModel.from_pretrained(args.model_name_or_path)
     model.resize_token_embeddings(len(tokenizer))
 
     print("Preparing training dataset...")
     train_dataset = CitationDataset(args.train_file, tokenizer, args.max_length)
-    eval_dataset = CitationDataset(args.eval_file, tokenizer, args.max_length) if args.eval_file else None
+    eval_dataset = None
+    if args.eval_file is not None:
+        eval_dataset = CitationDataset(args.eval_file, tokenizer, args.max_length)
+
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     training_args = TrainingArguments(
@@ -93,35 +95,10 @@ def main():
     print("Starting training...")
     trainer.train()
 
-    # Move the model to CPU to ensure quantization uses supported operators.
-    print("Moving model to CPU for quantization...")
-    model = model.to("cpu")
-
-    # Set the quantized engine. 'qnnpack' is usually available on ARM-based CPUs.
-    torch.backends.quantized.engine = "qnnpack"
-
-    print("Applying dynamic quantization...")
-    quantized_model = torch.quantization.quantize_dynamic(
-        model, {torch.nn.Linear}, dtype=torch.qint8
-    )
-
-    # Filter out any keys that are not tensors (e.g. torch.dtype objects) from the state dict.
-    state_dict = quantized_model.state_dict()
-    filtered_state_dict = {k: v for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
-
-    # Create the output directory if it doesn't exist.
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    print("Saving quantized model and tokenizer...")
-    # Save the filtered state dict as pytorch_model.bin
-    output_model_file = os.path.join(args.output_dir, "pytorch_model.bin")
-    torch.save(filtered_state_dict, output_model_file)
-
-    # Save configuration and tokenizer files.
-    model.config.save_pretrained(args.output_dir)
+    print("Saving the fine-tuned GPT-2 model...")
+    trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
-
-    print(f"Quantized model and tokenizer saved to {args.output_dir}")
+    print(f"Model saved to {args.output_dir}")
 
 if __name__ == "__main__":
     main()
