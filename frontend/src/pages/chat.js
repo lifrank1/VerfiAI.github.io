@@ -926,53 +926,19 @@ const Chat = () => {
   // Function to handle paper search
   const searchPaper = async (e) => {
     e.preventDefault();
-    
-    // Check if input is empty or user is trying to clear the chat
-    if (!input.trim() || input.toLowerCase() === "clear" || input.toLowerCase() === "reset") {
-      setMessages([{
-        type: "bot",
-        text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis."
-      }]);
-      setInput("");
-      
-      // If user is logged in, save this reset to Firestore
-      if (user && user.userID) {
-        // Create new chat session if there's no active one
-        if (!activeChatId) {
-          const newChatId = await createNewChatSession("Untitled", true);
-          if (!newChatId) return;
-        }
-        
-        // Clear existing messages for this chat if any
-        const db = getFirestore(firebaseApp);
-        const messagesRef = collection(db, "users", user.userID, "chatSessions", activeChatId, "messages");
-        const messagesSnapshot = await getDocs(messagesRef);
-        
-        // Delete all existing messages
-        const deletePromises = messagesSnapshot.docs.map(doc => 
-          deleteDoc(doc.ref)
-        );
-        await Promise.all(deletePromises);
-        
-        // Add welcome message
-        await addDoc(messagesRef, {
-          type: "bot",
-          text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
-          timestamp: serverTimestamp()
-        });
-      }
-      
-      return;
-    }
+    if (!input) return;
 
-    // Create new chat session if there's no active one
+    // Check if we have an active chat session
     if (user && user.userID && !activeChatId) {
-      const newChatId = await createNewChatSession("Untitled", true);
+      const newChatId = await createNewChatSession(input, true);
       if (!newChatId) return;
     }
 
     // Add user's message to UI immediately
-    const userMessage = { type: "user", text: input };
+    const userMessage = {
+      type: "user",
+      text: input,
+    };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     
@@ -983,11 +949,18 @@ const Chat = () => {
     setInput("");
 
     try {
+      console.log("📌 Sending API request to analyze paper with input:", input);
       const response = await axios.post("http://localhost:3002/api/analyze-paper", {
-        identifier: input,
+        doi: input,  // Changed from 'identifier' to 'doi' to match server expectation
       });
 
+      console.log("📌 API response received:", response);
       const { data } = response;
+      console.log("📌 API response data:", data);
+      
+      // Check if the data is inside a 'paper' object (from successful response)
+      // or directly at the top level (from error response)
+      const paperData = data.paper || data;
       
       // Format the bot response as rich content
       const botMessage = {
@@ -995,45 +968,50 @@ const Chat = () => {
         text: (
           <div className="bot-response">
             <h3>Paper Information</h3>
-            <p>
-              <strong>Title:</strong> {data.title}
-            </p>
-            <p>
-              <strong>DOI:</strong> {data.doi || "Not available"}
-            </p>
-            <p>
-              <strong>Publication Date:</strong> {data.publication_date || "Not available"}
-            </p>
-            <p>
-              <strong>Journal:</strong> {data.journal || "Not available"}
-            </p>
-            <p>
-              <strong>Authors:</strong>{" "}
-              {data.authors ? data.authors.join(", ") : "Not available"}
-            </p>
-
-            {data.retraction_notice && (
-              <div className="retraction-notice">
-                <p>
-                  <strong>⚠️ Retraction Notice:</strong> {data.retraction_notice}
-                </p>
-              </div>
-            )}
-
-            <h3>References</h3>
-            {data.references && data.references.length > 0 ? (
-              <ul className="references-list">
-                {data.references.map((ref, index) => (
-                  <ReferenceItem
-                    key={index}
-                    reference={ref}
-                    index={index}
-                    userID={user?.userID}
-                  />
-                ))}
-              </ul>
+            {data.success === false ? (
+              <p className="error-message">❌ {data.error || "Could not find paper information"}</p>
             ) : (
-              <p>No references available for this paper.</p>
+              <>
+                <p>
+                  <strong>Title:</strong> {paperData.title || "Not available"}
+                </p>
+                <p>
+                  <strong>DOI:</strong> {paperData.doi || "Not available"}
+                </p>
+                <p>
+                  <strong>Publication Year:</strong> {paperData.year || "Not available"}
+                </p>
+                <p>
+                  <strong>Authors:</strong>{" "}
+                  {paperData.authors && paperData.authors.length > 0 
+                    ? paperData.authors.join(", ") 
+                    : "Not available"}
+                </p>
+
+                {paperData.is_retracted && (
+                  <div className="retraction-notice">
+                    <p>
+                      <strong>⚠️ Retraction Notice:</strong> This paper has been retracted.
+                    </p>
+                  </div>
+                )}
+
+                <h3>References</h3>
+                {paperData.references && paperData.references.length > 0 ? (
+                  <ul className="references-list">
+                    {paperData.references.map((ref, index) => (
+                      <ReferenceItem
+                        key={index}
+                        reference={ref}
+                        index={index}
+                        userID={user?.userID}
+                      />
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No references available for this paper.</p>
+                )}
+              </>
             )}
           </div>
         ),
@@ -1045,7 +1023,8 @@ const Chat = () => {
       // Update UI with the bot response
       setMessages([...updatedMessages, botMessage]);
     } catch (error) {
-      console.error("Error analyzing paper:", error);
+      console.error("❌ Error analyzing paper:", error);
+      console.error("❌ Error response:", error.response?.data);
       
       // Create error message
       const errorMessage = {

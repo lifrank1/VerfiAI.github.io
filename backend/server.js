@@ -210,36 +210,57 @@ app.post("/api/chat", async (req, res) => {
 
 // 🔹 API: Analyze Paper using DOI
 app.post('/api/analyze-paper', async (req, res) => {
-  const { doi } = req.body;
-  console.log('Received DOI:', doi);
+  console.log('📌 API: Analyze Paper - Request body:', JSON.stringify(req.body));
+  const { doi, identifier } = req.body;
+  
+  // Handle both doi and identifier fields for backwards compatibility
+  const paperIdentifier = doi || identifier;
+  
+  console.log('📌 Received paper identifier:', paperIdentifier);
+  console.log('📌 Request body keys:', Object.keys(req.body));
+
+  if (!paperIdentifier) {
+    console.error('❌ Missing DOI or identifier in request');
+    return res.status(400).json({ success: false, error: 'Missing DOI or identifier' });
+  }
 
   // Determine the correct Python command based on your environment
   const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
   
-  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', doi]);
+  console.log(`📌 Executing Python command: ${pythonCommand} ./backend/scrapers/doi_citation.py ${paperIdentifier}`);
+  
+  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', paperIdentifier]);
   let data = '';
   let errorData = '';
 
   pythonProcess.stdout.on('data', (chunk) => {
     data += chunk;
-    console.log('Python output:', chunk.toString());
+    console.log('📌 Python output chunk:', chunk.toString());
   });
 
   pythonProcess.stderr.on('data', (chunk) => {
     errorData += chunk;
-    console.error('Python error:', chunk.toString());
+    console.error('❌ Python error:', chunk.toString());
   });
 
   pythonProcess.on('close', async (code) => {
+    console.log(`📌 Python process exited with code ${code}`);
+    
     if (code !== 0) {
-      return res.status(500).json({ error: 'Failed to analyze paper', details: errorData });
+      console.error(`❌ Python process failed with code ${code}`);
+      console.error('❌ Error data:', errorData);
+      return res.status(500).json({ success: false, error: 'Failed to analyze paper', details: errorData });
     }
+    
     try {
+      console.log('📌 Raw data from Python:', data);
       const result = JSON.parse(data);
-      console.log('Parsed result:', result);
+      console.log('📌 Parsed result:', result);
       res.json(result);
     } catch (e) {
-      res.status(500).json({ error: 'Invalid JSON response', details: e.message });
+      console.error('❌ JSON parse error:', e);
+      console.error('❌ Raw data that failed to parse:', data);
+      res.status(500).json({ success: false, error: 'Invalid JSON response', details: e.message });
     }
   });
 });

@@ -10,21 +10,39 @@ with open(os.path.join(os.path.dirname(__file__), '.env'), 'r') as f:
 
 def get_paper_by_doi(doi):
     """Fetch paper details from Crossref using DOI"""
+    print(f"📌 Original DOI string: '{doi}'")
+    
+    # Check if DOI is empty
+    if not doi or doi.strip() == "":
+        print("❌ Empty DOI provided")
+        return None
+    
+    # Clean up DOI
     doi = doi.replace("https://doi.org/", "").strip()
+    print(f"📌 Processed DOI: '{doi}'")
     
     url = f"https://api.crossref.org/works/{doi}"
     headers = {
         "User-Agent": "VerifAI/1.0"
     }
     
+    print(f"📌 Making request to CrossRef API: {url}")
+    
     try:
         response = requests.get(url, headers=headers)
+        print(f"📌 Response status code: {response.status_code}")
+        
         if response.status_code == 200:
+            print("📌 Successful response from CrossRef API")
             data = response.json()['message']
+            
+            # Log data structure for debugging
+            print(f"📌 Data keys: {list(data.keys())}")
             
             # Extract references if available
             references = []
             if 'reference' in data:
+                print(f"📌 Found {len(data['reference'])} references")
                 for ref in data.get('reference', []):
                     reference_item = {
                         'key': ref.get('key', ''),
@@ -51,21 +69,62 @@ def get_paper_by_doi(doi):
                         reference_item['year'] = ref['year']
                     
                     references.append(reference_item)
+            else:
+                print("📌 No references found in the paper data")
             
-            return {
-                'title': data.get('title', [''])[0],
-                'authors': [
-                    f"{author.get('given', '')} {author.get('family', '')}"
-                    for author in data.get('author', [])
-                ],
-                'year': str(data.get('published-print', {}).get('date-parts', [['']])[0][0]),
+            # Extract year safely
+            year = ""
+            if 'published-print' in data and 'date-parts' in data['published-print']:
+                parts = data['published-print']['date-parts']
+                if parts and parts[0] and len(parts[0]) > 0:
+                    year = str(parts[0][0])
+                    print(f"📌 Extracted year: {year}")
+                else:
+                    print("❌ Could not extract year from date-parts")
+            else:
+                print("❌ No published-print or date-parts found")
+            
+            # Extract title safely
+            title = ""
+            if 'title' in data and data['title']:
+                title = data['title'][0]
+                print(f"📌 Extracted title: {title}")
+            else:
+                print("❌ No title found")
+            
+            # Extract authors safely
+            authors = []
+            if 'author' in data:
+                for author in data.get('author', []):
+                    author_name = f"{author.get('given', '')} {author.get('family', '')}"
+                    authors.append(author_name)
+                print(f"📌 Extracted {len(authors)} authors")
+            else:
+                print("❌ No authors found")
+            
+            result = {
+                'title': title,
+                'authors': authors,
+                'year': year,
                 'doi': doi,
                 'abstract': data.get('abstract', ''),
                 'references': references
             }
+            
+            print("📌 Successfully constructed paper info")
+            return result
+        else:
+            print(f"❌ CrossRef API returned non-200 status: {response.status_code}")
+            print(f"❌ Response content: {response.text}")
+            return None
     except Exception as e:
-        print(f"Error fetching DOI: {e}")
-    return None
+        print(f"❌ Error fetching DOI: {e}")
+        # Print exception type and traceback
+        import traceback
+        print(f"❌ Exception type: {type(e).__name__}")
+        print("❌ Traceback:")
+        traceback.print_exc()
+        return None
 
 def classify_research_field(paper_info):
     """Classify the research field of the paper using a pre-trained classifier"""
@@ -135,37 +194,66 @@ def search_retracted_papers(title):
 
 def main(doi):
     """Main function to get paper details, check retraction, and classify research field"""
+    print(f"📌 DOI_CITATION.PY: Processing DOI '{doi}'")
+    
     try:
+        print("📌 Calling get_paper_by_doi()")
         paper_info = get_paper_by_doi(doi)
+        
         if not paper_info:
+            print("❌ Paper not found for the given DOI")
             return {'success': False, 'error': 'Paper not found'}
             
-        classification = classify_research_field(paper_info)
-        paper_info['research_field'] = classification
+        print("📌 Paper found, processing additional information")
         
-        # Generate citation based on field
-        citation = generate_field_specific_citation(paper_info, classification['field'])
-        paper_info['citation'] = citation
+        try:
+            print("📌 Classifying research field")
+            classification = classify_research_field(paper_info)
+            paper_info['research_field'] = classification
+            print(f"📌 Research field classified as: {classification['field']}")
+        except Exception as e:
+            print(f"❌ Error classifying research field: {e}")
+            paper_info['research_field'] = {'field': 'Unknown', 'confidence': 0}
         
-        # Check if the paper is retracted by title
-        retracted_results = search_retracted_papers(paper_info['title'])
-        is_retracted = len(retracted_results) > 0
+        try:
+            print("📌 Generating citation")
+            citation = generate_field_specific_citation(paper_info, paper_info['research_field']['field'])
+            paper_info['citation'] = citation
+            print(f"📌 Citation generated: {citation}")
+        except Exception as e:
+            print(f"❌ Error generating citation: {e}")
+            paper_info['citation'] = "Citation generation failed"
         
-        # Add retraction info to output
-        paper_info['is_retracted'] = is_retracted
-        if is_retracted:
-            paper_info['retraction_info'] = retracted_results
+        try:
+            print("📌 Checking if paper is retracted")
+            retracted_results = search_retracted_papers(paper_info['title'])
+            is_retracted = len(retracted_results) > 0
+            print(f"📌 Paper retracted: {is_retracted}")
+            
+            # Add retraction info to output
+            paper_info['is_retracted'] = is_retracted
+            if is_retracted:
+                paper_info['retraction_info'] = retracted_results
+                print(f"📌 Retraction info: {retracted_results}")
+        except Exception as e:
+            print(f"❌ Error checking retraction status: {e}")
+            paper_info['is_retracted'] = False
         
+        print("📌 Successfully processed paper information")
         return {
             'success': True,
             'paper': paper_info
         }
     
     except Exception as e:
+        print(f"❌ Main processing error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'success': False,
             'error': str(e)
         }
+
 def generate_field_specific_citation(paper_info, field):
     """Generate appropriate citation format based on research field"""
     
@@ -186,6 +274,7 @@ def generate_field_specific_citation(paper_info, field):
         return f"{authors}. {paper_info['year']}. {paper_info['title']}. DOI: {paper_info['doi']}"
     else:  # MLA
         return f"{authors}. \"{paper_info['title']}.\" {paper_info['year']}, doi:{paper_info['doi']}"
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
