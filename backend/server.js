@@ -186,10 +186,12 @@ app.post("/api/generate-citation", async (req, res) => {
 // 🔹 API: Chat with AI about Paper Contents
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message, paperContent } = req.body;
+    const { message, paperContent, userId, chatId } = req.body;
     
+    // Input for the AI model
     const input = `Context: ${paperContent}\nQuestion: ${message}`;
     
+    // Generate AI response
     const response = await hf.textGeneration({
       model: 'scieditor/citation-generation-t5',
       inputs: input,
@@ -199,8 +201,40 @@ app.post("/api/chat", async (req, res) => {
       }
     });
 
+    const aiReply = response.generated_text;
+    const timestamp = new Date();
+    
+    // Store in Firestore based on whether this is a new chat or existing one
+    let updatedChatId = chatId;
+    
+    if (!chatId) {
+      // Create a new chat document
+      const chatRef = await db.collection("chats").add({
+        userId,
+        title: message.substring(0, 30) + (message.length > 30 ? "..." : ""),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        messages: [
+          { role: "user", content: message, timestamp },
+          { role: "assistant", content: aiReply, timestamp }
+        ]
+      });
+      updatedChatId = chatRef.id;
+    } else {
+      // Update existing chat
+      const chatRef = db.collection("chats").doc(chatId);
+      await chatRef.update({
+        updatedAt: timestamp,
+        "messages": admin.firestore.FieldValue.arrayUnion(
+          { role: "user", content: message, timestamp },
+          { role: "assistant", content: aiReply, timestamp }
+        )
+      });
+    }
+
     res.json({
-      reply: response.generated_text
+      chatId: updatedChatId,
+      reply: aiReply
     });
   } catch (error) {
     console.error("Chat error:", error);
@@ -714,6 +748,83 @@ app.post('/api/verify-reference', async (req, res) => {
       verification_status: 'failed',
       error: error.message 
     });
+  }
+});
+
+// �� API: Retrieve User Chats
+app.get("/api/chats/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const snapshot = await db.collection("chats")
+      .where("userId", "==", userId)
+      .orderBy("updatedAt", "desc")
+      .get();
+    
+    const chats = snapshot.docs.map((doc) => ({ 
+      id: doc.id, 
+      ...doc.data(),
+      // Only include the last message in the list view for efficiency
+      messages: doc.data().messages.slice(-1)
+    }));
+    
+    res.json(chats);
+  } catch (error) {
+    console.error("Error retrieving chats:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🔹 API: Retrieve Single Chat
+app.get("/api/chats/:userId/:chatId", async (req, res) => {
+  try {
+    const { userId, chatId } = req.params;
+    const chatDoc = await db.collection("chats").doc(chatId).get();
+    
+    if (!chatDoc.exists) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+    
+    const chatData = chatDoc.data();
+    
+    // Verify that the chat belongs to the requesting user
+    if (chatData.userId !== userId) {
+      return res.status(403).json({ error: "Unauthorized access to chat" });
+    }
+    
+    res.json({ id: chatDoc.id, ...chatData });
+  } catch (error) {
+    console.error("Error retrieving chat:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🔹 API: Update Chat Title
+app.put("/api/chats/:chatId", async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { title } = req.body;
+    
+    await db.collection("chats").doc(chatId).update({
+      title,
+      updatedAt: new Date()
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error updating chat:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 🔹 API: Delete Chat
+app.delete("/api/chats/:chatId", async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    await db.collection("chats").doc(chatId).delete();
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting chat:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
