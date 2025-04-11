@@ -186,12 +186,10 @@ app.post("/api/generate-citation", async (req, res) => {
 // 🔹 API: Chat with AI about Paper Contents
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message, paperContent, userId, chatId } = req.body;
+    const { message, paperContent } = req.body;
     
-    // Input for the AI model
     const input = `Context: ${paperContent}\nQuestion: ${message}`;
     
-    // Generate AI response
     const response = await hf.textGeneration({
       model: 'scieditor/citation-generation-t5',
       inputs: input,
@@ -201,40 +199,8 @@ app.post("/api/chat", async (req, res) => {
       }
     });
 
-    const aiReply = response.generated_text;
-    const timestamp = new Date();
-    
-    // Store in Firestore based on whether this is a new chat or existing one
-    let updatedChatId = chatId;
-    
-    if (!chatId) {
-      // Create a new chat document
-      const chatRef = await db.collection("chats").add({
-        userId,
-        title: message.substring(0, 30) + (message.length > 30 ? "..." : ""),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        messages: [
-          { role: "user", content: message, timestamp },
-          { role: "assistant", content: aiReply, timestamp }
-        ]
-      });
-      updatedChatId = chatRef.id;
-    } else {
-      // Update existing chat
-      const chatRef = db.collection("chats").doc(chatId);
-      await chatRef.update({
-        updatedAt: timestamp,
-        "messages": admin.firestore.FieldValue.arrayUnion(
-          { role: "user", content: message, timestamp },
-          { role: "assistant", content: aiReply, timestamp }
-        )
-      });
-    }
-
     res.json({
-      chatId: updatedChatId,
-      reply: aiReply
+      reply: response.generated_text
     });
   } catch (error) {
     console.error("Chat error:", error);
@@ -242,169 +208,15 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// Helper function to safely parse JSON responses
-const safeJsonParse = (data) => {
-  try {
-    // Clean the string by removing any malformed parts
-    let cleanedData = data;
-    
-    // Try to clean up potential JSON syntax issues in references
-    if (cleanedData.includes('"doi": "10.1109/ICCV')) {
-      cleanedData = cleanedData.replace(/("doi": "10\.1109\/ICCV[^"]*)"(\s*)"year"/, '$1","year');
-    }
-    
-    // Try to fix any JSON where a value is missing quotes
-    cleanedData = cleanedData.replace(/([{,]\s*"[^"]+"\s*:\s*)([^"{}\[\],\s][^{}\[\],]*[^"{}\[\],\s])(\s*[},])/g, '$1"$2"$3');
-    
-    // Clean up any trailing commas in arrays or objects
-    cleanedData = cleanedData.replace(/,(\s*[\]}])/g, '$1');
-    
-    return JSON.parse(cleanedData);
-  } catch (e) {
-    console.error('❌ Error parsing JSON:', e);
-    // Only show the problematic part of the JSON to avoid console flooding
-    const preview = data.length > 500 ? 
-      data.substring(0, 200) + '...[truncated]...' + data.substring(data.length - 300) : 
-      data;
-    console.error('❌ JSON preview:', preview);
-    
-    // Find potential error locations with a regex check
-    const suspiciousPatterns = [
-      { pattern: /"year":\s*([^"}0-9][^"},\]]*[^"}0-9\s])\s*[,}]/, description: "Malformed year value" },
-      { pattern: /"doi":\s*"([^"]*?)"\s*"/, description: "Missing comma after DOI" },
-      { pattern: /,\s*}/, description: "Trailing comma in object" },
-      { pattern: /,\s*\]/, description: "Trailing comma in array" },
-      { pattern: /"([^"]*?)\\/, description: "Unescaped backslash in string" },
-      { pattern: /"[^"]*?$/, description: "Unterminated string" }
-    ];
-    
-    suspiciousPatterns.forEach(({pattern, description}) => {
-      const match = pattern.exec(data);
-      if (match) {
-        const context = data.substring(Math.max(0, match.index - 20), Math.min(data.length, match.index + 20));
-        console.error(`❌ Potential JSON error (${description}) around: ...${context}...`);
-      }
-    });
-    
-    throw new Error(`Invalid JSON: ${e.message}`);
-  }
-};
-
 // 🔹 API: Analyze Paper using DOI
 app.post('/api/analyze-paper', async (req, res) => {
-  console.log('📌 API: Analyze Paper - Request body:', JSON.stringify(req.body));
-  const { doi, identifier } = req.body;
-  
-  // Handle both doi and identifier fields for backwards compatibility
-  const paperIdentifier = doi || identifier;
-  
-  console.log('📌 Received paper identifier:', paperIdentifier);
-  console.log('📌 Request body keys:', Object.keys(req.body));
-
-  if (!paperIdentifier) {
-    console.error('❌ Missing DOI or identifier in request');
-    return res.status(400).json({ success: false, error: 'Missing DOI or identifier' });
-  }
+  const { doi } = req.body;
+  console.log('Received DOI:', doi);
 
   // Determine the correct Python command based on your environment
   const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
   
-  console.log(`📌 Executing Python command: ${pythonCommand} ./backend/scrapers/doi_citation.py ${paperIdentifier}`);
-  
-  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', paperIdentifier]);
-  let data = '';
-  let errorData = '';
-
-  // Now stdout should only contain the JSON response, while stderr will have debug info
-  pythonProcess.stdout.on('data', (chunk) => {
-    data += chunk;
-    console.log('📌 Python stdout (JSON data) received');
-  });
-
-  // Debug information now comes through stderr, but we don't treat it as errors
-  pythonProcess.stderr.on('data', (chunk) => {
-    // Capture the debug output for logging, but don't treat it as an error
-    const debugOutput = chunk.toString();
-    if (debugOutput.includes('❌')) {
-      // Only log actual errors
-      console.error('❌ Python error or warning:', debugOutput);
-      errorData += debugOutput;
-    } else {
-      // Log debug info at debug level
-      console.log('🔍 Python debug:', debugOutput.trim());
-    }
-  });
-
-  pythonProcess.on('close', async (code) => {
-    console.log(`📌 Python process exited with code ${code}`);
-    
-    if (code !== 0) {
-      console.error(`❌ Python process failed with code ${code}`);
-      console.error('❌ Error data:', errorData);
-      return res.status(500).json({ success: false, error: 'Failed to analyze paper', details: errorData });
-    }
-    
-    try {
-      // Data should now be clean JSON without any debug statements
-      let result;
-      try {
-        // Try parsing the output directly - it should now be pure JSON
-        result = JSON.parse(data.trim());
-        console.log('📌 Parsed JSON successfully');
-      } catch (jsonError) {
-        console.error('❌ JSON parse error:', jsonError);
-        
-        // If parsing failed, use our safe parsing helper as a fallback
-        try {
-          result = safeJsonParse(data);
-          console.log('📌 Parsed JSON using safeJsonParse fallback');
-        } catch (fallbackError) {
-          // If JSON parsing fails even with our helper, check for error response pattern
-          if (data.includes('"success": false') && data.includes('"error":')) {
-            // Try to extract the error message using regex
-            const errorMatch = /"error"\s*:\s*"([^"]+)"/.exec(data);
-            if (errorMatch && errorMatch[1]) {
-              return res.status(400).json({ 
-                success: false, 
-                error: errorMatch[1]
-              });
-            }
-          }
-          
-          // Show helpful error details
-          console.error('❌ Complete JSON parse failure:', fallbackError);
-          const preview = data.length > 200 ? 
-            data.substring(0, 100) + '...' + data.substring(data.length - 100) : 
-            data;
-          console.error('❌ Raw data preview:', preview);
-          
-          return res.status(500).json({ 
-            success: false, 
-            error: 'Invalid JSON response', 
-            details: fallbackError.message
-          });
-        }
-      }
-      
-      console.log('📌 Returning result to client');
-      res.json(result);
-    } catch (e) {
-      console.error('❌ General error in response handling:', e);
-      res.status(500).json({ success: false, error: 'Error processing response', details: e.message });
-    }
-  });
-});
-
-// 🔹 API: Search Paper by Title
-app.post('/api/search-paper', async (req, res) => {
-  const { title } = req.body;
-  console.log('Searching for paper with title:', title);
-
-  // Determine the correct Python command based on your environment
-  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-  
-  // Use check_paper.py which has search capabilities for arXiv, Semantic Scholar, and CrossRef
-  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', title]);
+  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', doi]);
   let data = '';
   let errorData = '';
 
@@ -420,92 +232,12 @@ app.post('/api/search-paper', async (req, res) => {
 
   pythonProcess.on('close', async (code) => {
     if (code !== 0) {
-      return res.status(500).json({ error: 'Failed to search for paper', details: errorData });
+      return res.status(500).json({ error: 'Failed to analyze paper', details: errorData });
     }
     try {
-      const results = JSON.parse(data);
-      console.log('Parsed search results:', results);
-      
-      // Check if we found any papers
-      const foundResults = results.arxiv.length > 0 || 
-                           results.semantic_scholar.length > 0 || 
-                           results.crossref.length > 0;
-      
-      if (!foundResults) {
-        return res.status(404).json({ success: false, error: 'No papers found matching that title' });
-      }
-      
-      // Return the first result found, prioritizing CrossRef, then Semantic Scholar, then arXiv
-      let paperId = null;
-      let bestResult = null;
-      
-      if (results.crossref.length > 0) {
-        bestResult = {
-          title: results.crossref[0].title,
-          doi: results.crossref[0].doi,
-          authors: results.crossref[0].authors || [],
-          year: results.crossref[0].year,
-          is_retracted: results.retracted.length > 0
-        };
-      } else if (results.semantic_scholar.length > 0) {
-        paperId = results.semantic_scholar[0].paperId;
-        bestResult = {
-          title: results.semantic_scholar[0].title,
-          doi: null,
-          authors: [],
-          is_retracted: results.retracted.length > 0
-        };
-      } else if (results.arxiv.length > 0) {
-        bestResult = {
-          title: results.arxiv[0].title,
-          doi: null,
-          authors: [],
-          is_retracted: results.retracted.length > 0
-        };
-      }
-      
-      // If we found a DOI and it's from CrossRef, try to get full paper details
-      if (bestResult.doi) {
-        try {
-          // Try to get more details using doi_citation.py
-          const detailProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', bestResult.doi]);
-          let detailData = '';
-          
-          detailProcess.stdout.on('data', (chunk) => {
-            detailData += chunk;
-          });
-          
-          await new Promise((resolve) => {
-            detailProcess.on('close', () => {
-              resolve();
-            });
-          });
-          
-          try {
-            const detailResult = JSON.parse(detailData);
-            if (detailResult.success && detailResult.paper) {
-              res.json(detailResult);
-              return;
-            }
-          } catch (e) {
-            console.error('Error parsing detailed paper data:', e);
-          }
-        } catch (detailError) {
-          console.error('Error getting detailed paper info:', detailError);
-        }
-      }
-      
-      // If we couldn't get detailed info, return the basic search result
-      res.json({ 
-        success: true, 
-        paper: bestResult,
-        results: {
-          arxiv: results.arxiv,
-          semantic_scholar: results.semantic_scholar,
-          crossref: results.crossref,
-          retracted: results.retracted
-        }
-      });
+      const result = JSON.parse(data);
+      console.log('Parsed result:', result);
+      res.json(result);
     } catch (e) {
       res.status(500).json({ error: 'Invalid JSON response', details: e.message });
     }
@@ -748,83 +480,6 @@ app.post('/api/verify-reference', async (req, res) => {
       verification_status: 'failed',
       error: error.message 
     });
-  }
-});
-
-// �� API: Retrieve User Chats
-app.get("/api/chats/:userId", async (req, res) => {
-  try {
-    const userId = req.params.userId;
-    const snapshot = await db.collection("chats")
-      .where("userId", "==", userId)
-      .orderBy("updatedAt", "desc")
-      .get();
-    
-    const chats = snapshot.docs.map((doc) => ({ 
-      id: doc.id, 
-      ...doc.data(),
-      // Only include the last message in the list view for efficiency
-      messages: doc.data().messages.slice(-1)
-    }));
-    
-    res.json(chats);
-  } catch (error) {
-    console.error("Error retrieving chats:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 🔹 API: Retrieve Single Chat
-app.get("/api/chats/:userId/:chatId", async (req, res) => {
-  try {
-    const { userId, chatId } = req.params;
-    const chatDoc = await db.collection("chats").doc(chatId).get();
-    
-    if (!chatDoc.exists) {
-      return res.status(404).json({ error: "Chat not found" });
-    }
-    
-    const chatData = chatDoc.data();
-    
-    // Verify that the chat belongs to the requesting user
-    if (chatData.userId !== userId) {
-      return res.status(403).json({ error: "Unauthorized access to chat" });
-    }
-    
-    res.json({ id: chatDoc.id, ...chatData });
-  } catch (error) {
-    console.error("Error retrieving chat:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 🔹 API: Update Chat Title
-app.put("/api/chats/:chatId", async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const { title } = req.body;
-    
-    await db.collection("chats").doc(chatId).update({
-      title,
-      updatedAt: new Date()
-    });
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error updating chat:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 🔹 API: Delete Chat
-app.delete("/api/chats/:chatId", async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    await db.collection("chats").doc(chatId).delete();
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting chat:", error);
-    res.status(500).json({ error: error.message });
   }
 });
 
