@@ -8,6 +8,34 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 with open(os.path.join(os.path.dirname(__file__), '.env'), 'r') as f:
     HUGGINGFACE_API_KEY = f.read().split('=')[1].strip()
 
+def calculate_author_relevance_score(reference):
+    """Calculate a relevance score for a reference based on author information and title"""
+    score = 0
+    
+    # Check if reference has a proper title
+    if reference.get('title') and reference['title'].strip() != '':
+        score += 5
+    
+    # Check if reference has authors
+    if reference.get('authors'):
+        # Add points for each author that is properly formatted
+        for author in reference['authors']:
+            if author and author.strip() != '':
+                score += 2
+                # Additional points if author name appears to be properly formatted
+                if ',' in author or ' ' in author:
+                    score += 1
+    
+    # Penalize if no title or unstructured data only
+    if not reference.get('title') and reference.get('unstructured'):
+        score -= 3
+    
+    # Penalize if no authors
+    if not reference.get('authors'):
+        score -= 2
+        
+    return score
+
 def get_paper_by_doi(doi):
     """Fetch paper details from Crossref using DOI"""
     doi = doi.replace("https://doi.org/", "").strip()
@@ -33,7 +61,8 @@ def get_paper_by_doi(doi):
                         'authors': [],
                         'year': '',
                         'unstructured': ref.get('unstructured', ''),
-                        'verification_status': 'pending'  # Initial status
+                        'verification_status': 'pending',  # Initial status
+                        'relevance_score': 0  # Initialize relevance score
                     }
                     
                     # Extract title
@@ -50,7 +79,13 @@ def get_paper_by_doi(doi):
                     if 'year' in ref:
                         reference_item['year'] = ref['year']
                     
+                    # Calculate relevance score
+                    reference_item['relevance_score'] = calculate_author_relevance_score(reference_item)
+                    
                     references.append(reference_item)
+                
+                # Sort references by relevance score in descending order
+                references.sort(key=lambda x: x['relevance_score'], reverse=True)
             
             return {
                 'title': data.get('title', [''])[0],
