@@ -22,7 +22,7 @@ const UploadFiles = () => {
       const response = await axios.post("/api/upload-document", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setUploadStatus(`Upload successful! Extracted text: ${response.data.extractedText.substring(0, 100)}...`);
+      setUploadStatus(`Upload successful! Extracted text: ${response.data.extractedText && response.data.extractedText.length > 0 ? response.data.extractedText.substring(0, 100) + '...' : 'No text extracted'}`);
     } catch (error) {
       setUploadStatus("Upload failed. Try again.");
       console.error("Upload error:", error);
