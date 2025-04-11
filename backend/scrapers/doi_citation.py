@@ -1,26 +1,28 @@
+#!/usr/bin/env python
 import json
-import requests
-import torch
 import os
-import re
+import requests
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
 
-# Set the local path to your fine-tuned GPT-2 citation-generation model.
-FINE_TUNED_MODEL_PATH = "/Users/Carli/VerfiAI/backend/models/my_finetuned_citation_gpt2_model"
+# Compute a relative path to the model repository.
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Assuming your model repository is in ../training/citation_gpt2_model relative to this script.
+FINE_TUNED_MODEL_PATH = os.path.abspath(os.path.join(script_dir, "..", "training", "citation_gpt2_model"))
+print("Loading model from:", FINE_TUNED_MODEL_PATH)
 
-
-# Load the model and tokenizer from the local directory using local_files_only=True.
+# Load the model and tokenizer using Hugging Face's from_pretrained().
 model = GPT2LMHeadModel.from_pretrained(FINE_TUNED_MODEL_PATH, local_files_only=True)
 tokenizer = GPT2Tokenizer.from_pretrained(FINE_TUNED_MODEL_PATH, local_files_only=True)
-# Set pad_token since GPT-2 doesn't have one by default.
+
+# Set the pad token since GPT-2 doesn't have one by default.
 tokenizer.pad_token = tokenizer.eos_token
 
-# Now create the text-generation pipeline with the loaded model and tokenizer.
+# Create a text-generation pipeline.
 citation_generator = pipeline(
     "text-generation",
     model=model,
     tokenizer=tokenizer,
-    pad_token_id=50256
+    pad_token_id=tokenizer.eos_token_id
 )
 
 def get_paper_by_doi(doi):
@@ -28,12 +30,10 @@ def get_paper_by_doi(doi):
     doi = doi.replace("https://doi.org/", "").strip()
     url = f"https://api.crossref.org/works/{doi}"
     headers = {"User-Agent": "VerifAI/1.0"}
-    
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()['message']
-            # Extract references if available.
             references = []
             if 'reference' in data:
                 for ref in data.get('reference', []):
@@ -50,19 +50,14 @@ def get_paper_by_doi(doi):
                         reference_item['title'] = ref['article-title']
                     elif 'unstructured' in ref:
                         reference_item['title'] = ref['unstructured']
-                    
                     if 'author' in ref:
                         reference_item['authors'] = ref['author'].split(',')
-                    
                     if 'year' in ref:
                         reference_item['year'] = ref['year']
-                    
                     references.append(reference_item)
-            
             return {
                 'title': data.get('title', [''])[0],
-                'authors': [f"{author.get('given', '')} {author.get('family', '')}".strip() 
-                            for author in data.get('author', [])],
+                'authors': [f"{author.get('given', '')} {author.get('family', '')}".strip() for author in data.get('author', [])],
                 'year': str(data.get('published-print', {}).get('date-parts', [['']])[0][0]),
                 'doi': doi,
                 'abstract': data.get('abstract', ''),
@@ -84,15 +79,13 @@ def get_paper_by_doi_semantic(doi):
             year = str(data.get("year", ""))
             title = data.get("title", "")
             abstract = data.get("abstract", "")
-            # Skip references from Semantic Scholar for now.
-            references = []
             return {
                 'title': title,
                 'authors': authors,
                 'year': year,
                 'doi': doi,
                 'abstract': abstract,
-                'references': references
+                'references': []
             }
     except Exception as e:
         print(f"Error fetching DOI from Semantic Scholar: {e}")
@@ -102,7 +95,6 @@ def get_combined_metadata(doi):
     """Combine metadata from CrossRef and Semantic Scholar for a DOI."""
     crossref_data = get_paper_by_doi(doi)
     semantic_data = get_paper_by_doi_semantic(doi)
-    
     if crossref_data is None:
         return semantic_data
     if semantic_data:
@@ -119,7 +111,7 @@ def get_combined_metadata(doi):
 def search_retracted_papers(title):
     """
     Check if a paper is retracted using CrossRef (Retraction Watch) by searching the paper title.
-    Returns a list of retracted papers that match the title, each with title and DOI.
+    Returns a list of retracted papers (each with title and DOI).
     """
     base_url = "https://api.crossref.org/works"
     params = {
@@ -138,8 +130,8 @@ def search_retracted_papers(title):
 
 def generate_citation_for_paper(paper_info):
     """
-    Generate a citation for the paper using the fine-tuned GPT-2 model.
-    Constructs a prompt that includes key metadata and generates a citation.
+    Generate an IEEE citation for the paper using the quantized GPT-2 model.
+    Constructs a prompt with key metadata and generates the citation.
     """
     prompt = (
         f"Generate an IEEE citation for a paper with the following details:\n"
@@ -153,21 +145,17 @@ def generate_citation_for_paper(paper_info):
     return citation
 
 def main(doi):
-    """Main function to get paper details, check retraction status, and generate a citation."""
+    """Main function: fetch metadata, generate citation, and output JSON result."""
     try:
         paper_info = get_combined_metadata(doi)
         if not paper_info:
             return {'success': False, 'error': 'Paper not found'}
-            
         citation = generate_citation_for_paper(paper_info)
         paper_info['citation'] = citation
-        
         retracted_results = search_retracted_papers(paper_info['title'])
-        is_retracted = len(retracted_results) > 0
-        paper_info['is_retracted'] = is_retracted
-        if is_retracted:
+        paper_info['is_retracted'] = len(retracted_results) > 0
+        if paper_info['is_retracted']:
             paper_info['retraction_info'] = retracted_results
-        
         return {
             'success': True,
             'paper': paper_info
