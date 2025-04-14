@@ -370,6 +370,17 @@ const ReferenceItem = ({ reference, index, userID }) => {
               </a>
             </p>
           )}
+          {reference.similarity_percentage !== undefined && (
+    <p style={{ margin: '0.25rem 0', fontSize: '0.9rem', color: '#333' }}>
+      Relatability: {reference.similarity_percentage}%
+    </p>
+  )}
+
+  {reference.similarity_score !== undefined && (
+    <p style={{ margin: '0.25rem 0', fontSize: '0.9rem', color: '#333' }}>
+      Raw Score: {reference.similarity_score.toFixed(7)}
+    </p>
+  )}
         </div>
 
         <div className="reference-status-container">
@@ -758,6 +769,7 @@ const Chat = () => {
         doi: input,
       });
       const paper = response.data.paper;
+      console.log("Received paper:", paper);
 
       let retractionNotice = paper.is_retracted ? (
         <div>
@@ -829,7 +841,7 @@ const Chat = () => {
             ))}
           </ul>
           <p>
-            <b>📊 Research Field:</b> {paper.research_field.field}
+            <b>📊 Research Field:</b> {paper.research_field?.field || "Unspecified"}
           </p>
           <p>
             <b>📅 Year:</b> {paper.year}
