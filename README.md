@@ -67,8 +67,7 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 - [WebScraper README](./backend/scrapers/README.md) - Explore the web scraper setup, how it extracts citation data, and how to install it. 
 
 
-## System Context Diagram![image](https://github.com/user-attachments/assets/9facf59b-7820-4cf9-88b6-02a646cfc1ff)
-
+## System Context Diagram
 ![Alt text](readmePictures/systemcontext.png)
 
 
