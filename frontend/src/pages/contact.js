@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import "../styles/HomeScreen.css";
 import "../styles/Contact.css";
 import NavigationHeader from "../components/NavigationHeader";
-import logo from "../assets/verifaiLogo.png";
 
 const MemberCard = ({ name, description, email, icon }) => {
   return (
@@ -24,7 +23,9 @@ const ContactPage = () => {
       <div className="contact-section">
         <div className="contact-header">
           <h1>Drop us a line</h1>
-          <img src={logo} alt="VerifAI Logo" className="contact-logo" />
+          <div className="logo-container">
+            <h1 className="logo-text">V<span className="dot">.</span>ai</h1>
+          </div>
         </div>
         
         <div className="contact-description">
