@@ -6,26 +6,26 @@ import ChatContext from '../chat/ChatContext';
 const VerificationStatsButton = ({ references, user }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [verificationStats, setVerificationStats] = useState({
     verified: 0,
     notVerified: 0,
     unverifiable: 0,
-    unverifiableRefs: [],
-    loading: false
+    unverifiableRefs: []
   });
   const [verificationResults, setVerificationResults] = useState([]);
   const { saveReferenceToFirestore } = useContext(ChatContext);
 
-  // Start verification when component mounts
+  // Start verification when component mounts with simplified approach
   useEffect(() => {
     if (references.length > 0) {
-      console.log(`VerificationStatsButton: Starting verification for ${references.length} references, User logged in: ${user ? 'Yes' : 'No'}`);
+      console.log(`VerificationStatsButton: Starting verification for ${references.length} references`);
       verifyAllReferences();
     }
   }, [references]);
 
   const verifyAllReferences = async () => {
-    setVerificationStats(prev => ({ ...prev, loading: true }));
+    setIsLoading(true);
     console.log("Starting batch verification of all references");
     
     try {
@@ -65,14 +65,15 @@ const VerificationStatsButton = ({ references, user }) => {
       }, { verified: 0, notVerified: 0, unverifiable: 0, unverifiableRefs: [] });
 
       console.log("Verification stats calculated:", stats);
-      setVerificationStats({ ...stats, loading: false });
+      setVerificationStats(stats);
     } catch (error) {
       console.error("Error in batch verification:", error);
       setVerificationStats(prev => ({ 
         ...prev, 
-        loading: false,
         failed: true 
       }));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -243,7 +244,7 @@ const VerificationStatsButton = ({ references, user }) => {
 
           <h3 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>References Verification</h3>
 
-          {verificationStats.loading ? (
+          {isLoading ? (
             <div style={{ textAlign: 'center', padding: '2rem' }}>
               <p>Verifying references...</p>
             </div>

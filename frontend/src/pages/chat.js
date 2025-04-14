@@ -101,6 +101,12 @@ const Chat = () => {
             setActiveChatId(newChatRef.id);
           } else {
             console.log("Found existing chats:", snapshot.size);
+            // If there are existing chats but no active chat ID, select the first one
+            if (!activeChatId) {
+              const firstChat = snapshot.docs[0];
+              console.log("Setting active chat to first existing:", firstChat.id);
+              setActiveChatId(firstChat.id);
+            }
           }
         } catch (error) {
           console.error("Error creating initial chat session:", error);
@@ -108,7 +114,12 @@ const Chat = () => {
       }
     };
     
-    createInitialChat();
+    // Wait a short time after initial render to avoid disrupting other components
+    const timer = setTimeout(() => {
+      createInitialChat();
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, [user, user?.userID, chatSessions.length, activeChatId]);
 
   // Load chat sessions when user is authenticated
@@ -650,7 +661,7 @@ const Chat = () => {
   // UI for the three-panel layout
   return (
     <ChatContext.Provider value={{ 
-      activeChatId, 
+      activeChatId: activeChatId || null, // Ensure this is never undefined
       saveReferenceToFirestore,
       user: user || { userID: null } // Ensure user is never null
     }}>

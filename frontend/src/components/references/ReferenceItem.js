@@ -3,72 +3,38 @@ import axios from 'axios';
 import ChatContext from '../chat/ChatContext';
 
 const ReferenceItem = ({ reference, index, userID }) => {
-  const [verificationStatus, setVerificationStatus] = useState("pending");
-  const [results, setResults] = useState(null);
-  const { activeChatId, saveReferenceToFirestore } = useContext(ChatContext);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationStarted, setVerificationStarted] = useState(false);
-  
-  // Force re-render at regular intervals during verification
-  const [, forceUpdate] = useState(0);
-  
+  const [verificationResults, setVerificationResults] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
+  const [hasVerified, setHasVerified] = useState(false);
+  const { saveReferenceToFirestore } = useContext(ChatContext);
+
+  // Execute verification on mount - simple and direct approach
   useEffect(() => {
-    let intervalId;
-    if (verificationStatus === "in_progress") {
-      // Force re-render every second while verifying to ensure UI updates
-      intervalId = setInterval(() => {
-        forceUpdate(prev => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
+    const verifyReference = async () => {
+      if (hasVerified) return; // Prevent multiple verifications
+      
+      try {
+        console.log(`Verifying reference ${index}:`, reference);
+        setIsLoading(true);
+        
+        const response = await axios.post("http://localhost:3002/api/verify-reference", {
+          reference,
+        });
+        
+        console.log(`Verification result for ${index}:`, response.data);
+        setVerificationResults(response.data.results);
+        setVerificationSuccess(response.data.verification_status === "verified");
+        setHasVerified(true);
+      } catch (error) {
+        console.error(`Verification failed for reference ${index}:`, error);
+      } finally {
+        setIsLoading(false);
+      }
     };
-  }, [verificationStatus]);
 
-  // Start verification on component mount with no dependencies on userID
-  useEffect(() => {
-    console.log(`ReferenceItem mounted: Index=${index}, UserID=${userID ? 'present' : 'absent'}`);
-    
-    // Only start verification if we haven't already
-    if (!verificationStarted) {
-      const timer = setTimeout(() => {
-        console.log(`Starting verification for reference ${index}`);
-        setVerificationStatus("in_progress");
-        setIsVerifying(true);
-        setVerificationStarted(true);
-      }, 200 * (index + 1)); // Staggered start times for better UI
-      
-      return () => clearTimeout(timer);
-    }
-  }, [index, verificationStarted]);
-
-  // Handle verification process
-  useEffect(() => {
-    if (isVerifying) {
-      console.log(`Performing verification API call for reference ${index}, userID: ${userID || 'none'}`);
-      
-      const performVerification = async () => {
-        try {
-          console.log(`Verification API call starting for reference ${index}:`, reference);
-          const response = await axios.post("http://localhost:3002/api/verify-reference", {
-            reference,
-          });
-          console.log(`Verification API response for ${index}:`, response.data);
-
-          // Update UI with results
-          setVerificationStatus(response.data.verification_status);
-          setResults(response.data.results);
-        } catch (error) {
-          console.error(`Verification failed for reference ${index}:`, error);
-          setVerificationStatus("failed");
-        } finally {
-          setIsVerifying(false);
-        }
-      };
-
-      performVerification();
-    }
-  }, [isVerifying, reference, index]);
+    verifyReference();
+  }, [reference, index]); // Only depend on reference and index
 
   const handleSaveReference = async () => {
     if (!userID) {
@@ -83,7 +49,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
         year: reference.year || null,
         doi: reference.doi || null,
         research_field: { field: "Reference" },
-        is_retracted: verificationStatus === "retracted"
+        is_retracted: false
       };
       
       const success = await saveReferenceToFirestore(citationData, userID);
@@ -96,18 +62,6 @@ const ReferenceItem = ({ reference, index, userID }) => {
       alert("Error saving citation. Please try again.");
     }
   };
-
-  // Status indicator configurations
-  const statusInfo = {
-    pending: { icon: "⚪", text: "Not Verified" },
-    in_progress: { icon: "🔄", text: "Verifying..." },
-    verified: { icon: "✅", text: "Verified" },
-    not_found: { icon: "⚠️", text: "Not Found" },
-    failed: { icon: "❌", text: "Verification Failed" },
-    retracted: { icon: "🚫", text: "Retracted" },
-  };
-
-  const status = statusInfo[verificationStatus] || statusInfo.pending;
 
   return (
     <li className="reference-item">
@@ -139,41 +93,51 @@ const ReferenceItem = ({ reference, index, userID }) => {
         </div>
 
         <div className="reference-status-container" style={{ pointerEvents: 'auto' }}>
-          <div className={`status-badge status-${verificationStatus}`}>
-            <span className="status-icon">{status.icon}</span>
-            <span className="status-text">{status.text}</span>
-          </div>
-
-          {/* Save Button (only if verified) */}
-          {verificationStatus === "verified" && (
-            <button
-              onClick={handleSaveReference}
-              className="verify-button"
-              style={{
-                cursor: 'pointer',
-                background: '#6E44FF',
-                color: 'white',
-                border: 'none',
-                padding: '4px 8px',
-                borderRadius: '4px'
-              }}
-            >
-              Save
-            </button>
+          {isLoading ? (
+            <div className="status-badge status-in_progress">
+              <span className="status-icon">🔄</span>
+              <span className="status-text">Verifying...</span>
+            </div>
+          ) : verificationSuccess ? (
+            <>
+              <div className="status-badge status-verified">
+                <span className="status-icon">✅</span>
+                <span className="status-text">Verified</span>
+              </div>
+              <button
+                onClick={handleSaveReference}
+                className="verify-button"
+                style={{
+                  cursor: 'pointer',
+                  background: '#6E44FF',
+                  color: 'white',
+                  border: 'none',
+                  padding: '4px 8px',
+                  borderRadius: '4px'
+                }}
+              >
+                Save
+              </button>
+            </>
+          ) : (
+            <div className="status-badge status-not_found">
+              <span className="status-icon">⚠️</span>
+              <span className="status-text">Not Found</span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Verification results */}
-      {results && verificationStatus !== "failed" && verificationStatus !== "pending" && (
+      {/* Only show verification results when available and not loading */}
+      {verificationResults && !isLoading && (
         <div className="results-container">
           <p className="results-heading">Verification Results:</p>
 
-          {results.crossref && results.crossref.length > 0 && (
+          {verificationResults.crossref && verificationResults.crossref.length > 0 && (
             <div className="results-section">
               <p className="results-section-title">Found on CrossRef:</p>
               <ul className="results-list">
-                {results.crossref.map((item, idx) => (
+                {verificationResults.crossref.map((item, idx) => (
                   <li key={idx} className="results-item">
                     <strong>{item.title}</strong>
                     {item.publisher && <span> - {item.publisher}</span>}
@@ -192,11 +156,11 @@ const ReferenceItem = ({ reference, index, userID }) => {
             </div>
           )}
 
-          {results.arxiv && results.arxiv.length > 0 && (
+          {verificationResults.arxiv && verificationResults.arxiv.length > 0 && (
             <div className="results-section">
               <p className="results-section-title">Found on ArXiv:</p>
               <ul className="results-list">
-                {results.arxiv.map((item, idx) => (
+                {verificationResults.arxiv.map((item, idx) => (
                   <li key={idx} className="results-item">
                     <a href={item.link} target="_blank" rel="noopener noreferrer">
                       {item.title}
@@ -207,11 +171,11 @@ const ReferenceItem = ({ reference, index, userID }) => {
             </div>
           )}
 
-          {results.semantic_scholar && results.semantic_scholar.length > 0 && (
+          {verificationResults.semantic_scholar && verificationResults.semantic_scholar.length > 0 && (
             <div className="results-section">
               <p className="results-section-title">Found on Semantic Scholar:</p>
               <ul className="results-list">
-                {results.semantic_scholar.map((item, idx) => (
+                {verificationResults.semantic_scholar.map((item, idx) => (
                   <li key={idx} className="results-item">
                     <a
                       href={`https://www.semanticscholar.org/paper/${item.paperId}`}
@@ -226,13 +190,13 @@ const ReferenceItem = ({ reference, index, userID }) => {
             </div>
           )}
 
-          {results.retracted && results.retracted.length > 0 && (
+          {verificationResults.retracted && verificationResults.retracted.length > 0 && (
             <div className="results-section">
               <p className="results-section-title retracted-title">
                 Retraction Information:
               </p>
               <ul className="results-list">
-                {results.retracted.map((item, idx) => (
+                {verificationResults.retracted.map((item, idx) => (
                   <li key={idx} className="results-item">
                     <span className="retracted-title">{item.title}</span> -{" "}
                     <a
@@ -248,10 +212,10 @@ const ReferenceItem = ({ reference, index, userID }) => {
             </div>
           )}
 
-          {((results.crossref && results.crossref.length === 0) &&
-            (results.arxiv && results.arxiv.length === 0) &&
-            (results.semantic_scholar && results.semantic_scholar.length === 0) &&
-            (results.retracted && results.retracted.length === 0)) && (
+          {((verificationResults.crossref && verificationResults.crossref.length === 0) &&
+            (verificationResults.arxiv && verificationResults.arxiv.length === 0) &&
+            (verificationResults.semantic_scholar && verificationResults.semantic_scholar.length === 0) &&
+            (verificationResults.retracted && verificationResults.retracted.length === 0)) && (
             <p className="not-found-message">
               This reference was not found in any of the searched databases.
             </p>
