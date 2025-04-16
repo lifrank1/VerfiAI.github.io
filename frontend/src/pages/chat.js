@@ -40,7 +40,7 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
     const results = await Promise.all(
       references.map(async (reference) => {
         try {
-          const response = await axios.post('https://verifiai-3431b785f8d8.herokuapp.com//api/verify-reference', {
+          const response = await axios.post('https://verfiai.uc.r.appspot.com//api/verify-reference', {
             reference
           });
           return {
@@ -295,7 +295,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
     try {
       setVerificationStatus("in_progress");
 
-      const response = await axios.post("https://verifiai-3431b785f8d8.herokuapp.com//api/verify-reference", {
+      const response = await axios.post("https://verfiai.uc.r.appspot.com//api/verify-reference", {
         reference,
       });
 
@@ -604,7 +604,7 @@ const Chat = () => {
     formData.append("file", uploadedFile);
 
     try {
-      const response = await axios.post("https://verifiai-3431b785f8d8.herokuapp.com//api/upload-document", formData, {
+      const response = await axios.post("https://verfiai.uc.r.appspot.com//api/upload-document", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -765,7 +765,7 @@ const Chat = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post("https://verifiai-3431b785f8d8.herokuapp.com//api/analyze-paper", {
+      const response = await axios.post("https://verfiai.uc.r.appspot.com//api/analyze-paper", {
         doi: input,
       });
       const paper = response.data.paper;
