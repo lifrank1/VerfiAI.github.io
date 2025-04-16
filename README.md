@@ -85,4 +85,5 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 ## Testing Plan
 ![Alt text](readmePictures/test.png)
 
-
+## Use Cases
+![Alt text](readmePictures/usecase.png)
