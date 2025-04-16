@@ -76,6 +76,8 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 ## Database Diagram
 ![Alt text](readmePictures/database.png)
 
+## API Diagram
+![Alt text](readmePictures/api.png)
 
 
 
