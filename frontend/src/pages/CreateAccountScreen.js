@@ -23,7 +23,7 @@ function CreateAccount() {
     }
 
     try {
-      const response = await fetch('https://verifiai-3431b785f8d8.herokuapp.com//api/create-user', {
+      const response = await fetch('https://verfiai.uc.r.appspot.com//api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, firstName, lastName }),

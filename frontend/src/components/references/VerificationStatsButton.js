@@ -29,7 +29,7 @@ const VerificationStatsButton = ({ references, user }) => {
         limitedReferences.map(async (reference, index) => {
           try {
             console.log(`Verifying reference ${index + 1}/${limitedReferences.length}`);
-            const response = await axios.post('https://verifiai-3431b785f8d8.herokuapp.com//api/verify-reference', {
+            const response = await axios.post('https://verfiai.uc.r.appspot.com//api/verify-reference', {
               reference
             });
             console.log(`Reference ${index + 1} verification result:`, response.data.verification_status);

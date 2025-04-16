@@ -9,6 +9,15 @@ const { HfInference } = require("@huggingface/inference");
 const multer = require("multer");
 const { spawn } = require("child_process");
 
+// Allow CORS from frontend
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://verifai-frontend.onrender.com', 'https://verifiai-3431b785f8d8.herokuapp.com', '*'] 
+    : ['http://localhost:3000', '*'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // 🔹 Initialize Firebase
 const serviceAccount = require("./firebase-adminsdk.json");
 admin.initializeApp({
@@ -16,7 +25,7 @@ admin.initializeApp({
 });
 
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const db = admin.firestore();
@@ -482,7 +491,7 @@ app.post("/api/verify-reference", async (req, res) => {
 });
 
 // 🔹 Start the Server
-const port = 3002;
+const port = process.env.PORT || 3002;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
