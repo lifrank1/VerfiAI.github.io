@@ -79,6 +79,8 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 ## API Detail
 ![Alt text](readmePictures/api.png)
 
+## Sequence Diagram
+![Alt text](readmePictures/sd.png)
 
 
 
