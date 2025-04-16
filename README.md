@@ -82,5 +82,7 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 ## Sequence Diagram
 ![Alt text](readmePictures/sd.png)
 
+## Testing Plan
+![Alt text](readmePictures/test.png)
 
 
