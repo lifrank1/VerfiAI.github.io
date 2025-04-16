@@ -491,7 +491,7 @@ app.post("/api/verify-reference", async (req, res) => {
 });
 
 // 🔹 Start the Server
-const port = 3002;
+const port = process.env.PORT || 3002;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
