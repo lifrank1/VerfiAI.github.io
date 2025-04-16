@@ -8,7 +8,8 @@
   "scripts": {
     "start": "concurrently \"npm run frontend\" \"npm run backend\"",
     "frontend": "cd frontend && npm start",
-    "backend": "node backend/server.js"
+    "backend": "node backend/server.js",
+    "build": "react-scripts build"
   },
   "eslintConfig": {
     "extends": [
@@ -30,7 +31,8 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.1.5",
     "swagger-ui-express": "^5.0.1",
-    "yamljs": "^0.3.0"
+    "yamljs": "^0.3.0",
+    "concurrently": "^9.1.2"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
