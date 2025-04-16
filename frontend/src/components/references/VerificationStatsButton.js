@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { Pie } from 'react-chartjs-2';
 import axios from 'axios';
 import ChatContext from '../chat/ChatContext';
@@ -15,24 +15,20 @@ const VerificationStatsButton = ({ references, user }) => {
   });
   const [verificationResults, setVerificationResults] = useState([]);
   const { saveReferenceToFirestore } = useContext(ChatContext);
-
-  // Start verification when component mounts with simplified approach
-  useEffect(() => {
-    if (references.length > 0) {
-      console.log(`VerificationStatsButton: Starting verification for ${references.length} references`);
-      verifyAllReferences();
-    }
-  }, [references]);
-
-  const verifyAllReferences = async () => {
+  
+  const verifyAllReferences = useCallback(async () => {
     setIsLoading(true);
     console.log("Starting batch verification of all references");
     
     try {
+      // Limit to first 3 references for testing
+      const limitedReferences = references.slice(0, 3);
+      console.log(`Testing with first ${limitedReferences.length} references (out of ${references.length} total)`);
+      
       const results = await Promise.all(
-        references.map(async (reference, index) => {
+        limitedReferences.map(async (reference, index) => {
           try {
-            console.log(`Verifying reference ${index + 1}/${references.length}`);
+            console.log(`Verifying reference ${index + 1}/${limitedReferences.length}`);
             const response = await axios.post('http://localhost:3002/api/verify-reference', {
               reference
             });
@@ -51,18 +47,31 @@ const VerificationStatsButton = ({ references, user }) => {
         })
       );
 
-      console.log("All references verification complete:", results);
+      console.log("Limited references verification complete:", results);
       setVerificationResults(results);
 
-      const stats = results.reduce((acc, { status, reference }) => {
-        if (status === 'verified') acc.verified++;
+      // Count stats for the limited set but add placeholders for the rest
+      const stats = {
+        verified: 0,
+        notVerified: 0,
+        unverifiable: 0,
+        unverifiableRefs: []
+      };
+      
+      // Process the verified references
+      results.forEach(({ status, reference }) => {
+        if (status === 'verified') stats.verified++;
         else if (status === 'not_found' || status === 'failed') {
-          acc.unverifiable++;
-          acc.unverifiableRefs.push(reference);
+          stats.unverifiable++;
+          stats.unverifiableRefs.push(reference);
         }
-        else acc.notVerified++;
-        return acc;
-      }, { verified: 0, notVerified: 0, unverifiable: 0, unverifiableRefs: [] });
+        else stats.notVerified++;
+      });
+      
+      // Add note about limited verification
+      stats.limitedVerification = true;
+      stats.totalReferences = references.length;
+      stats.verifiedCount = limitedReferences.length;
 
       console.log("Verification stats calculated:", stats);
       setVerificationStats(stats);
@@ -75,7 +84,30 @@ const VerificationStatsButton = ({ references, user }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [references]);
+  
+  // Reset verification state when user login state changes
+  useEffect(() => {
+    if (references.length > 0) {
+      setIsLoading(true);
+      setVerificationStats({
+        verified: 0,
+        notVerified: 0,
+        unverifiable: 0,
+        unverifiableRefs: []
+      });
+      setVerificationResults([]);
+      verifyAllReferences();
+    }
+  }, [user?.userID, references, verifyAllReferences]);
+
+  // Start verification when component mounts with simplified approach
+  useEffect(() => {
+    if (references.length > 0) {
+      console.log(`VerificationStatsButton: Starting verification for ${references.length} references`);
+      verifyAllReferences();
+    }
+  }, [references, verifyAllReferences]);
 
   // Save all verified references
   const saveAllVerifiedReferences = async () => {
@@ -209,6 +241,9 @@ const VerificationStatsButton = ({ references, user }) => {
         }}>
           <p>View References Status</p>
           <p>{verificationStats.verified} Verified, {verificationStats.notVerified + verificationStats.unverifiable} Unverified</p>
+          {verificationStats.limitedVerification && (
+            <p style={{ fontSize: '0.8em', color: 'orange' }}>Testing: First 3 references only</p>
+          )}
         </div>
       )}
 
@@ -257,6 +292,11 @@ const VerificationStatsButton = ({ references, user }) => {
               <div style={{ marginTop: '2rem' }}>
                 <h4>Verification Summary</h4>
                 <p>Total References: {references.length}</p>
+                {verificationStats.limitedVerification && (
+                  <p style={{ color: 'orange', fontStyle: 'italic' }}>
+                    Testing Mode: Only verifying first {verificationStats.verifiedCount} references
+                  </p>
+                )}
                 <p>Verified: {verificationStats.verified}</p>
                 <p>Not Verified: {verificationStats.notVerified}</p>
                 <p>Unverifiable: {verificationStats.unverifiable}</p>

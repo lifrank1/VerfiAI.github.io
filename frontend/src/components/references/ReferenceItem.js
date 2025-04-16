@@ -7,7 +7,12 @@ const ReferenceItem = ({ reference, index, userID }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [hasVerified, setHasVerified] = useState(false);
-  const { saveReferenceToFirestore } = useContext(ChatContext);
+  const { saveReferenceToFirestore, user } = useContext(ChatContext);
+
+  // Reset verification state when user login state changes
+  useEffect(() => {
+    setHasVerified(false);
+  }, [userID, user?.userID]);
 
   // Execute verification on mount - simple and direct approach
   useEffect(() => {
@@ -34,7 +39,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
     };
 
     verifyReference();
-  }, [reference, index]); // Only depend on reference and index
+  }, [reference, index, hasVerified]); // Add hasVerified to dependencies
 
   const handleSaveReference = async () => {
     if (!userID) {
