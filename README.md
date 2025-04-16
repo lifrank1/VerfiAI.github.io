@@ -73,6 +73,9 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 ## Reference Architecture Diagram
 ![Alt text](readmePictures/RAD.png)
 
+## Database Diagram
+![Alt text](readmePictures/database.png)
+
 
 
 
