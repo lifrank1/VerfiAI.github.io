@@ -1,6 +1,4 @@
-#!/usr/bin/env python
 import json
-import os
 import requests
 import difflib
 from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
@@ -49,7 +47,7 @@ def rank_references(main_title, main_abstract, references):
         # ...and similarity over the combined title+abstract vs. reference title.
         content_sim = difflib.SequenceMatcher(None, main_text.lower(), ref_title.lower()).ratio() if ref_title else 0
         # Combine the two scores with chosen weights: 70% title, 30% content.
-        final_score = 0.7 * title_sim + 0.3 * content_sim
+        final_score = (0.7 * title_sim + 0.3 * content_sim) *2
         ref["similarity_score"] = final_score
         ref["similarity_percentage"] = round(final_score * 100, 2)
     return sorted(references, key=lambda x: x.get("similarity_score", 0), reverse=True)
@@ -61,8 +59,12 @@ def get_paper_by_doi(doi):
     and return a dictionary with the paper details.
     """
     doi = doi.replace("https://doi.org/", "").strip()
+    
     url = f"https://api.crossref.org/works/{doi}"
-    headers = {"User-Agent": "VerifAI/1.0"}
+    headers = {
+        "User-Agent": "VerifAI/1.0"
+    }
+    
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
