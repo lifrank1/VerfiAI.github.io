@@ -1,11 +1,11 @@
 const path = require("path");
-const fs = require("fs"); // Add fs module import
+const fs = require("fs");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
-const { HfInference } = require('@huggingface/inference');
+const { HfInference } = require("@huggingface/inference");
 const multer = require("multer");
 const { spawn } = require("child_process");
 
@@ -22,53 +22,54 @@ app.use(express.json());
 const db = admin.firestore();
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
 
+// Logging helper function
+const logDebug = (...args) => {
+  console.debug("[DEBUG]", ...args);
+};
+
+logDebug("Server starting...");
+
 // 🔹 Multer Configuration for File Uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // Ensure uploads directory exists
-    if (!fs.existsSync("uploads")) {
-      fs.mkdirSync("uploads");
+    const uploadsDir = "uploads";
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir);
+      logDebug("Created uploads directory:", uploadsDir);
     }
-    cb(null, "uploads/");
+    cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
+    const filename = Date.now() + "-" + file.originalname;
+    logDebug("Saving file as:", filename);
+    cb(null, filename);
   },
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
 // 🔹 API: Create a new user
 app.post("/api/create-user", async (req, res) => {
+  logDebug("Received create-user request:", req.body);
   const { email, password, firstName, lastName } = req.body;
-
   try {
-    // Check if email exists first
-    const usersByEmail = await admin.auth().getUserByEmail(email);
-    
-    // If we get here, the email exists
+    await admin.auth().getUserByEmail(email);
+    logDebug("Email already in use:", email);
     return res.status(400).json({
       success: false,
       message: "Email already in use.",
     });
   } catch (error) {
-    // If error code is auth/user-not-found, the email is available
-    if (error.code === 'auth/user-not-found') {
+    if (error.code === "auth/user-not-found") {
       try {
-        // Create the new user
-        const userRecord = await admin.auth().createUser({
-          email,
-          password,
-        });
-
-        // Store additional user details in Firestore
+        const userRecord = await admin.auth().createUser({ email, password });
         await db.collection("users").doc(userRecord.uid).set({
           firstName,
           lastName,
           email,
           createdAt: new Date(),
         });
-
+        logDebug("Created new user:", userRecord.uid);
         return res.json({ success: true, uid: userRecord.uid });
       } catch (createError) {
         console.error("Error creating user:", createError);
@@ -78,8 +79,6 @@ app.post("/api/create-user", async (req, res) => {
         });
       }
     }
-
-    // Handle any other errors
     console.error("Error checking email:", error);
     return res.status(400).json({
       success: false,
@@ -90,14 +89,17 @@ app.post("/api/create-user", async (req, res) => {
 
 // 🔹 API: Upload Document and Process Contents
 app.post("/api/upload-document", upload.single("file"), async (req, res) => {
+  logDebug("Upload-document endpoint called");
   if (!req.file) {
+    logDebug("No file uploaded");
     return res.status(400).json({ error: "No file uploaded." });
   }
-  console.log("Uploaded file:", req.file.path);
+  logDebug("Uploaded file:", req.file.path);
 
   // Ensure uploads directory exists
   if (!fs.existsSync("uploads")) {
     fs.mkdirSync("uploads");
+    logDebug("Created uploads directory");
   }
 
   const pythonProcess = spawn("python3", [
@@ -110,7 +112,7 @@ app.post("/api/upload-document", upload.single("file"), async (req, res) => {
 
   pythonProcess.stdout.on("data", (chunk) => {
     data += chunk;
-    console.log("Python Output:", chunk.toString());
+    logDebug("Python Output:", chunk.toString());
   });
 
   pythonProcess.stderr.on("data", (chunk) => {
@@ -119,40 +121,36 @@ app.post("/api/upload-document", upload.single("file"), async (req, res) => {
   });
 
   pythonProcess.on("close", async (code) => {
+    logDebug("Document scraper process exited with code:", code);
     if (code !== 0) {
       return res.status(500).json({ error: "Failed to process document", details: errorData });
     }
-
     try {
       const result = JSON.parse(data);
-      
+      logDebug("Parsed result from document_scraper:", result);
       if (result.error) {
         return res.status(500).json({ error: result.error, details: result.details || "" });
       }
-      
-      const extractedText = result.text;
-      const references = result.references || [];
-      const metadata = result.metadata || {};
-      const citationStyle = result.citation_style;
-
+      const { text: extractedText, references, metadata, citation_style } = result;
       const docRef = await db.collection("documents").add({
         fileName: req.file.originalname,
         extractedText,
         references,
         metadata,
-        citationStyle,
+        citationStyle: citation_style,
         uploadedAt: new Date(),
       });
-
-      res.json({ 
-        success: true, 
-        documentId: docRef.id, 
+      logDebug("Document saved to Firestore with ID:", docRef.id);
+      res.json({
+        success: true,
+        documentId: docRef.id,
         extractedText,
         references,
         metadata,
-        citationStyle
+        citationStyle: citation_style,
       });
     } catch (e) {
+      console.error("Error parsing document result:", e);
       res.status(500).json({ error: "Invalid JSON response", details: e.message });
     }
   });
@@ -160,23 +158,18 @@ app.post("/api/upload-document", upload.single("file"), async (req, res) => {
 
 // 🔹 API: Generate Citations
 app.post("/api/generate-citation", async (req, res) => {
+  logDebug("Generate-citation endpoint called with body:", req.body);
   try {
     const { paperTitle, authors, year } = req.body;
-    
     const input = `generate citation for: ${paperTitle} by ${authors} published in ${year}`;
-    
+    logDebug("Citation generation input:", input);
     const response = await hf.textGeneration({
-      model: 'scieditor/citation-generation-t5',
+      model: "scieditor/citation-generation-t5",
       inputs: input,
-      parameters: {
-        max_length: 512,
-        temperature: 0.7
-      }
+      parameters: { max_length: 512, temperature: 0.7 },
     });
-
-    res.json({
-      citation: response.generated_text
-    });
+    logDebug("Citation generation response:", response);
+    res.json({ citation: response.generated_text });
   } catch (error) {
     console.error("Citation generation error:", error);
     res.status(500).json({ error: error.message });
@@ -185,363 +178,88 @@ app.post("/api/generate-citation", async (req, res) => {
 
 // 🔹 API: Chat with AI about Paper Contents
 app.post("/api/chat", async (req, res) => {
+  logDebug("Chat endpoint called with body:", req.body);
   try {
-    const { message, paperContent, userId, chatId } = req.body;
-    
-    // Input for the AI model
+    const { message, paperContent } = req.body;
     const input = `Context: ${paperContent}\nQuestion: ${message}`;
-    
-    // Generate AI response
+    logDebug("Chat input:", input);
     const response = await hf.textGeneration({
-      model: 'scieditor/citation-generation-t5',
+      model: "scieditor/citation-generation-t5",
       inputs: input,
-      parameters: {
-        max_length: 1024,
-        temperature: 0.8
-      }
+      parameters: { max_length: 1024, temperature: 0.8 },
     });
-
-    const aiReply = response.generated_text;
-    const timestamp = new Date();
-    
-    // Store in Firestore based on whether this is a new chat or existing one
-    let updatedChatId = chatId;
-    
-    if (!chatId) {
-      // Create a new chat document
-      const chatRef = await db.collection("chats").add({
-        userId,
-        title: message.substring(0, 30) + (message.length > 30 ? "..." : ""),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        messages: [
-          { role: "user", content: message, timestamp },
-          { role: "assistant", content: aiReply, timestamp }
-        ]
-      });
-      updatedChatId = chatRef.id;
-    } else {
-      // Update existing chat
-      const chatRef = db.collection("chats").doc(chatId);
-      await chatRef.update({
-        updatedAt: timestamp,
-        "messages": admin.firestore.FieldValue.arrayUnion(
-          { role: "user", content: message, timestamp },
-          { role: "assistant", content: aiReply, timestamp }
-        )
-      });
-    }
-
-    res.json({
-      chatId: updatedChatId,
-      reply: aiReply
-    });
+    logDebug("Chat response:", response);
+    res.json({ reply: response.generated_text });
   } catch (error) {
     console.error("Chat error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Helper function to safely parse JSON responses
-const safeJsonParse = (data) => {
-  try {
-    // Clean the string by removing any malformed parts
-    let cleanedData = data;
-    
-    // Try to clean up potential JSON syntax issues in references
-    if (cleanedData.includes('"doi": "10.1109/ICCV')) {
-      cleanedData = cleanedData.replace(/("doi": "10\.1109\/ICCV[^"]*)"(\s*)"year"/, '$1","year');
-    }
-    
-    // Try to fix any JSON where a value is missing quotes
-    cleanedData = cleanedData.replace(/([{,]\s*"[^"]+"\s*:\s*)([^"{}\[\],\s][^{}\[\],]*[^"{}\[\],\s])(\s*[},])/g, '$1"$2"$3');
-    
-    // Clean up any trailing commas in arrays or objects
-    cleanedData = cleanedData.replace(/,(\s*[\]}])/g, '$1');
-    
-    return JSON.parse(cleanedData);
-  } catch (e) {
-    console.error('❌ Error parsing JSON:', e);
-    // Only show the problematic part of the JSON to avoid console flooding
-    const preview = data.length > 500 ? 
-      data.substring(0, 200) + '...[truncated]...' + data.substring(data.length - 300) : 
-      data;
-    console.error('❌ JSON preview:', preview);
-    
-    // Find potential error locations with a regex check
-    const suspiciousPatterns = [
-      { pattern: /"year":\s*([^"}0-9][^"},\]]*[^"}0-9\s])\s*[,}]/, description: "Malformed year value" },
-      { pattern: /"doi":\s*"([^"]*?)"\s*"/, description: "Missing comma after DOI" },
-      { pattern: /,\s*}/, description: "Trailing comma in object" },
-      { pattern: /,\s*\]/, description: "Trailing comma in array" },
-      { pattern: /"([^"]*?)\\/, description: "Unescaped backslash in string" },
-      { pattern: /"[^"]*?$/, description: "Unterminated string" }
-    ];
-    
-    suspiciousPatterns.forEach(({pattern, description}) => {
-      const match = pattern.exec(data);
-      if (match) {
-        const context = data.substring(Math.max(0, match.index - 20), Math.min(data.length, match.index + 20));
-        console.error(`❌ Potential JSON error (${description}) around: ...${context}...`);
-      }
-    });
-    
-    throw new Error(`Invalid JSON: ${e.message}`);
-  }
-};
-
 // 🔹 API: Analyze Paper using DOI
-app.post('/api/analyze-paper', async (req, res) => {
-  console.log('📌 API: Analyze Paper - Request body:', JSON.stringify(req.body));
-  const { doi, identifier } = req.body;
-  
-  // Handle both doi and identifier fields for backwards compatibility
-  const paperIdentifier = doi || identifier;
-  
-  console.log('📌 Received paper identifier:', paperIdentifier);
-  console.log('📌 Request body keys:', Object.keys(req.body));
-
-  if (!paperIdentifier) {
-    console.error('❌ Missing DOI or identifier in request');
-    return res.status(400).json({ success: false, error: 'Missing DOI or identifier' });
-  }
-
-  // Determine the correct Python command based on your environment
-  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-  
-  console.log(`📌 Executing Python command: ${pythonCommand} ./backend/scrapers/doi_citation.py ${paperIdentifier}`);
-  
-  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', paperIdentifier]);
-  let data = '';
-  let errorData = '';
-
-  // Now stdout should only contain the JSON response, while stderr will have debug info
-  pythonProcess.stdout.on('data', (chunk) => {
+app.post("/api/analyze-paper", async (req, res) => {
+  logDebug("Analyze-paper endpoint called with body:", req.body);
+  const { doi } = req.body;
+  console.log("Received DOI:", doi);
+  const pythonCommand = process.platform === "win32" ? "python" : "python3";
+  logDebug("Using python command for DOI analysis:", pythonCommand);
+  const pythonProcess = spawn(pythonCommand, ["./backend/scrapers/doi_citation.py", doi]);
+  let data = "";
+  let errorData = "";
+  pythonProcess.stdout.on("data", (chunk) => {
     data += chunk;
-    console.log('📌 Python stdout (JSON data) received');
+    logDebug("DOI analysis Python stdout:", chunk.toString());
   });
-
-  // Debug information now comes through stderr, but we don't treat it as errors
-  pythonProcess.stderr.on('data', (chunk) => {
-    // Capture the debug output for logging, but don't treat it as an error
-    const debugOutput = chunk.toString();
-    if (debugOutput.includes('❌')) {
-      // Only log actual errors
-      console.error('❌ Python error or warning:', debugOutput);
-      errorData += debugOutput;
-    } else {
-      // Log debug info at debug level
-      console.log('🔍 Python debug:', debugOutput.trim());
-    }
+  pythonProcess.stderr.on("data", (chunk) => {
+    errorData += chunk;
+    console.error("DOI analysis Python stderr:", chunk.toString());
   });
-
-  pythonProcess.on('close', async (code) => {
-    console.log(`📌 Python process exited with code ${code}`);
-    
+  pythonProcess.on("close", async (code) => {
+    logDebug("DOI analysis process exited with code:", code);
     if (code !== 0) {
-      console.error(`❌ Python process failed with code ${code}`);
-      console.error('❌ Error data:', errorData);
-      return res.status(500).json({ success: false, error: 'Failed to analyze paper', details: errorData });
+      return res.status(500).json({ error: "Failed to analyze paper", details: errorData });
     }
-    
     try {
-      // Data should now be clean JSON without any debug statements
-      let result;
-      try {
-        // Try parsing the output directly - it should now be pure JSON
-        result = JSON.parse(data.trim());
-        console.log('📌 Parsed JSON successfully');
-      } catch (jsonError) {
-        console.error('❌ JSON parse error:', jsonError);
-        
-        // If parsing failed, use our safe parsing helper as a fallback
-        try {
-          result = safeJsonParse(data);
-          console.log('📌 Parsed JSON using safeJsonParse fallback');
-        } catch (fallbackError) {
-          // If JSON parsing fails even with our helper, check for error response pattern
-          if (data.includes('"success": false') && data.includes('"error":')) {
-            // Try to extract the error message using regex
-            const errorMatch = /"error"\s*:\s*"([^"]+)"/.exec(data);
-            if (errorMatch && errorMatch[1]) {
-              return res.status(400).json({ 
-                success: false, 
-                error: errorMatch[1]
-              });
-            }
-          }
-          
-          // Show helpful error details
-          console.error('❌ Complete JSON parse failure:', fallbackError);
-          const preview = data.length > 200 ? 
-            data.substring(0, 100) + '...' + data.substring(data.length - 100) : 
-            data;
-          console.error('❌ Raw data preview:', preview);
-          
-          return res.status(500).json({ 
-            success: false, 
-            error: 'Invalid JSON response', 
-            details: fallbackError.message
-          });
-        }
-      }
-      
-      console.log('📌 Returning result to client');
+      const result = JSON.parse(data);
+      logDebug("Parsed result from doi_citation.py:", result);
       res.json(result);
     } catch (e) {
-      console.error('❌ General error in response handling:', e);
-      res.status(500).json({ success: false, error: 'Error processing response', details: e.message });
-    }
-  });
-});
-
-// 🔹 API: Search Paper by Title
-app.post('/api/search-paper', async (req, res) => {
-  const { title } = req.body;
-  console.log('Searching for paper with title:', title);
-
-  // Determine the correct Python command based on your environment
-  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-  
-  // Use check_paper.py which has search capabilities for arXiv, Semantic Scholar, and CrossRef
-  const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', title]);
-  let data = '';
-  let errorData = '';
-
-  pythonProcess.stdout.on('data', (chunk) => {
-    data += chunk;
-    console.log('Python output:', chunk.toString());
-  });
-
-  pythonProcess.stderr.on('data', (chunk) => {
-    errorData += chunk;
-    console.error('Python error:', chunk.toString());
-  });
-
-  pythonProcess.on('close', async (code) => {
-    if (code !== 0) {
-      return res.status(500).json({ error: 'Failed to search for paper', details: errorData });
-    }
-    try {
-      const results = JSON.parse(data);
-      console.log('Parsed search results:', results);
-      
-      // Check if we found any papers
-      const foundResults = results.arxiv.length > 0 || 
-                           results.semantic_scholar.length > 0 || 
-                           results.crossref.length > 0;
-      
-      if (!foundResults) {
-        return res.status(404).json({ success: false, error: 'No papers found matching that title' });
-      }
-      
-      // Return the first result found, prioritizing CrossRef, then Semantic Scholar, then arXiv
-      let paperId = null;
-      let bestResult = null;
-      
-      if (results.crossref.length > 0) {
-        bestResult = {
-          title: results.crossref[0].title,
-          doi: results.crossref[0].doi,
-          authors: results.crossref[0].authors || [],
-          year: results.crossref[0].year,
-          is_retracted: results.retracted.length > 0
-        };
-      } else if (results.semantic_scholar.length > 0) {
-        paperId = results.semantic_scholar[0].paperId;
-        bestResult = {
-          title: results.semantic_scholar[0].title,
-          doi: null,
-          authors: [],
-          is_retracted: results.retracted.length > 0
-        };
-      } else if (results.arxiv.length > 0) {
-        bestResult = {
-          title: results.arxiv[0].title,
-          doi: null,
-          authors: [],
-          is_retracted: results.retracted.length > 0
-        };
-      }
-      
-      // If we found a DOI and it's from CrossRef, try to get full paper details
-      if (bestResult.doi) {
-        try {
-          // Try to get more details using doi_citation.py
-          const detailProcess = spawn(pythonCommand, ['./backend/scrapers/doi_citation.py', bestResult.doi]);
-          let detailData = '';
-          
-          detailProcess.stdout.on('data', (chunk) => {
-            detailData += chunk;
-          });
-          
-          await new Promise((resolve) => {
-            detailProcess.on('close', () => {
-              resolve();
-            });
-          });
-          
-          try {
-            const detailResult = JSON.parse(detailData);
-            if (detailResult.success && detailResult.paper) {
-              res.json(detailResult);
-              return;
-            }
-          } catch (e) {
-            console.error('Error parsing detailed paper data:', e);
-          }
-        } catch (detailError) {
-          console.error('Error getting detailed paper info:', detailError);
-        }
-      }
-      
-      // If we couldn't get detailed info, return the basic search result
-      res.json({ 
-        success: true, 
-        paper: bestResult,
-        results: {
-          arxiv: results.arxiv,
-          semantic_scholar: results.semantic_scholar,
-          crossref: results.crossref,
-          retracted: results.retracted
-        }
-      });
-    } catch (e) {
-      res.status(500).json({ error: 'Invalid JSON response', details: e.message });
+      console.error("Error parsing JSON from DOI analysis:", e);
+      res.status(500).json({ error: "Invalid JSON response", details: e.message });
     }
   });
 });
 
 // 🔹 API: Get ISBN Citation
 app.post("/api/isbn-citation", async (req, res) => {
+  logDebug("ISBN-citation endpoint called with body:", req.body);
   const { isbn } = req.body;
-  
   try {
-    // Determine the correct Python command based on your environment
-    const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-    
-    const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/isbn_citation.py', isbn]);
-    
-    let data = '';
-    let errorData = '';
-    
-    pythonProcess.stdout.on('data', (chunk) => {
+    const pythonCommand = process.platform === "win32" ? "python" : "python3";
+    logDebug("Using python command for ISBN analysis:", pythonCommand);
+    const pythonProcess = spawn(pythonCommand, ["./backend/scrapers/isbn_citation.py", isbn]);
+    let data = "";
+    let errorData = "";
+    pythonProcess.stdout.on("data", (chunk) => {
       data += chunk;
+      logDebug("ISBN analysis Python stdout:", chunk.toString());
     });
-    
-    pythonProcess.stderr.on('data', (chunk) => {
+    pythonProcess.stderr.on("data", (chunk) => {
       errorData += chunk;
+      console.error("ISBN analysis Python stderr:", chunk.toString());
     });
-    
-    pythonProcess.on('close', (code) => {
+    pythonProcess.on("close", (code) => {
+      logDebug("ISBN analysis process exited with code:", code);
       if (code !== 0) {
-        return res.status(500).json({ error: 'Failed to process ISBN', details: errorData });
+        return res.status(500).json({ error: "Failed to process ISBN", details: errorData });
       }
       try {
         const results = JSON.parse(data);
+        logDebug("Parsed ISBN result:", results);
         res.json(results);
       } catch (e) {
-        res.status(500).json({ error: 'Invalid JSON response', details: e.message });
+        console.error("Error parsing JSON from ISBN analysis:", e);
+        res.status(500).json({ error: "Invalid JSON response", details: e.message });
       }
     });
   } catch (error) {
@@ -552,43 +270,53 @@ app.post("/api/isbn-citation", async (req, res) => {
 
 // 🔹 API: Retrieve Uploaded Documents
 app.get("/api/documents", async (req, res) => {
+  logDebug("Retrieve documents endpoint called.");
   try {
     const snapshot = await db.collection("documents").orderBy("uploadedAt", "desc").get();
     const documents = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    logDebug("Retrieved documents:", documents);
     res.json(documents);
   } catch (error) {
+    console.error("Error retrieving documents:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Get User
 app.get("/api/users/:uid", async (req, res) => {
+  logDebug("Get user endpoint called for uid:", req.params.uid);
   try {
     const userDoc = await db.collection("users").doc(req.params.uid).get();
     if (!userDoc.exists) {
+      logDebug("User not found for uid:", req.params.uid);
       return res.status(404).json({ error: "User not found" });
     }
     res.json(userDoc.data());
   } catch (error) {
+    console.error("Error retrieving user:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Get Paper by DOI
 app.get("/api/papers/:doi", async (req, res) => {
+  logDebug("Get paper by DOI endpoint called for doi:", req.params.doi);
   try {
     const paperDoc = await db.collection("papers").doc(req.params.doi).get();
     if (!paperDoc.exists) {
+      logDebug("Paper not found for doi:", req.params.doi);
       return res.status(404).json({ error: "Paper not found" });
     }
     res.json(paperDoc.data());
   } catch (error) {
+    console.error("Error retrieving paper:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Update User
 app.put("/api/users/:uid", async (req, res) => {
+  logDebug("Update user endpoint called for uid:", req.params.uid, "with body:", req.body);
   try {
     const { firstName, lastName, email } = req.body;
     await db.collection("users").doc(req.params.uid).update({
@@ -599,12 +327,14 @@ app.put("/api/users/:uid", async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
+    console.error("Error updating user:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Update Paper
 app.put("/api/papers/:doi", async (req, res) => {
+  logDebug("Update paper endpoint called for doi:", req.params.doi, "with body:", req.body);
   try {
     const { title, authors, year } = req.body;
     await db.collection("papers").doc(req.params.doi).update({
@@ -615,216 +345,139 @@ app.put("/api/papers/:doi", async (req, res) => {
     });
     res.json({ success: true });
   } catch (error) {
+    console.error("Error updating paper:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Delete User
 app.delete("/api/users/:uid", async (req, res) => {
+  logDebug("Delete user endpoint called for uid:", req.params.uid);
   try {
     await admin.auth().deleteUser(req.params.uid);
     await db.collection("users").doc(req.params.uid).delete();
     res.json({ success: true });
   } catch (error) {
+    console.error("Error deleting user:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Delete Paper
 app.delete("/api/papers/:doi", async (req, res) => {
+  logDebug("Delete paper endpoint called for doi:", req.params.doi);
   try {
     await db.collection("papers").doc(req.params.doi).delete();
     res.json({ success: true });
   } catch (error) {
+    console.error("Error deleting paper:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 🔹 API: Verify Reference
-app.post('/api/verify-reference', async (req, res) => {
+app.post("/api/verify-reference", async (req, res) => {
+  logDebug("Verify reference endpoint called with reference:", req.body.reference);
   const { reference } = req.body;
-  console.log('Verifying reference:', reference);
-  
   try {
-    // First priority: Check if the reference has a DOI
     if (reference.doi) {
-      // Use the DOI verification method
-      const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-      const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', reference.doi]);
-      
-      let data = '';
-      let errorData = '';
-      
-      pythonProcess.stdout.on('data', (chunk) => {
+      logDebug("Reference has DOI:", reference.doi);
+      const pythonCommand = process.platform === "win32" ? "python" : "python3";
+      logDebug("Using python command:", pythonCommand);
+      const pythonProcess = spawn(pythonCommand, ["./backend/scrapers/check_paper.py", reference.doi]);
+      let data = "";
+      let errorData = "";
+      pythonProcess.stdout.on("data", (chunk) => {
         data += chunk;
+        logDebug("Verify-reference python stdout:", chunk.toString());
       });
-      
-      pythonProcess.stderr.on('data', (chunk) => {
+      pythonProcess.stderr.on("data", (chunk) => {
         errorData += chunk;
+        console.error("Verify-reference python stderr:", chunk.toString());
       });
-      
-      pythonProcess.on('close', (code) => {
+      pythonProcess.on("close", (code) => {
+        logDebug("Verify-reference python process exited with code:", code);
         if (code !== 0) {
-          return res.status(500).json({ 
-            verification_status: 'failed',
-            error: 'Failed to verify reference', 
-            details: errorData 
+          return res.status(500).json({
+            verification_status: "failed",
+            error: "Failed to verify reference",
+            details: errorData
           });
         }
-        
         try {
           const results = JSON.parse(data);
-          const isVerified = results.arxiv.length > 0 || 
-                           results.semantic_scholar.length > 0 || 
-                           results.crossref.length > 0;
+          logDebug("Verify-reference parsed results:", results);
+          const isVerified = results.arxiv.length > 0 ||
+                             results.semantic_scholar.length > 0 ||
+                             results.crossref.length > 0;
           const isRetracted = results.retracted.length > 0;
-          
           res.json({
-            verification_status: isVerified ? (isRetracted ? 'retracted' : 'verified') : 'not_found',
+            verification_status: isVerified ? (isRetracted ? "retracted" : "verified") : "not_found",
             results
           });
         } catch (e) {
-          res.status(500).json({ 
-            verification_status: 'failed',
-            error: 'Invalid JSON response', 
-            details: e.message 
+          res.status(500).json({
+            verification_status: "failed",
+            error: "Invalid JSON response",
+            details: e.message
           });
         }
       });
-    } 
-    // Second priority: Use the title to search
-    else if (reference.title) {
-      const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-      const pythonProcess = spawn(pythonCommand, ['./backend/scrapers/check_paper.py', reference.title]);
-      
-      let data = '';
-      let errorData = '';
-      
-      pythonProcess.stdout.on('data', (chunk) => {
+    } else if (reference.title) {
+      logDebug("Reference has title:", reference.title);
+      const pythonCommand = process.platform === "win32" ? "python" : "python3";
+      logDebug("Using python command:", pythonCommand);
+      const pythonProcess = spawn(pythonCommand, ["./backend/scrapers/check_paper.py", reference.title]);
+      let data = "";
+      let errorData = "";
+      pythonProcess.stdout.on("data", (chunk) => {
         data += chunk;
+        logDebug("Verify-reference (title) python stdout:", chunk.toString());
       });
-      
-      pythonProcess.stderr.on('data', (chunk) => {
+      pythonProcess.stderr.on("data", (chunk) => {
         errorData += chunk;
+        console.error("Verify-reference (title) python stderr:", chunk.toString());
       });
-      
-      pythonProcess.on('close', (code) => {
+      pythonProcess.on("close", (code) => {
+        logDebug("Verify-reference (title) python process exited with code:", code);
         if (code !== 0) {
-          return res.status(500).json({ 
-            verification_status: 'failed',
-            error: 'Failed to verify reference', 
-            details: errorData 
+          return res.status(500).json({
+            verification_status: "failed",
+            error: "Failed to verify reference",
+            details: errorData
           });
         }
-        
         try {
           const results = JSON.parse(data);
-          const isVerified = results.arxiv.length > 0 || 
-                           results.semantic_scholar.length > 0 || 
-                           results.crossref.length > 0;
+          logDebug("Verify-reference (title) parsed results:", results);
+          const isVerified = results.arxiv.length > 0 ||
+                             results.semantic_scholar.length > 0 ||
+                             results.crossref.length > 0;
           const isRetracted = results.retracted.length > 0;
-          
           res.json({
-            verification_status: isVerified ? (isRetracted ? 'retracted' : 'verified') : 'not_found',
+            verification_status: isVerified ? (isRetracted ? "retracted" : "verified") : "not_found",
             results
           });
         } catch (e) {
-          res.status(500).json({ 
-            verification_status: 'failed',
-            error: 'Invalid JSON response', 
-            details: e.message 
+          res.status(500).json({
+            verification_status: "failed",
+            error: "Invalid JSON response",
+            details: e.message
           });
         }
       });
     } else {
-      res.status(400).json({ 
-        verification_status: 'failed',
-        error: 'Reference must have either a DOI or title for verification'
+      res.status(400).json({
+        verification_status: "failed",
+        error: "Reference must have either a DOI or title for verification"
       });
     }
   } catch (error) {
     console.error("Reference verification error:", error);
-    res.status(500).json({ 
-      verification_status: 'failed',
-      error: error.message 
+    res.status(500).json({
+      verification_status: "failed",
+      error: error.message
     });
-  }
-});
-
-// �� API: Retrieve User Chats
-app.get("/api/chats/:userId", async (req, res) => {
-  try {
-    const userId = req.params.userId;
-    const snapshot = await db.collection("chats")
-      .where("userId", "==", userId)
-      .orderBy("updatedAt", "desc")
-      .get();
-    
-    const chats = snapshot.docs.map((doc) => ({ 
-      id: doc.id, 
-      ...doc.data(),
-      // Only include the last message in the list view for efficiency
-      messages: doc.data().messages.slice(-1)
-    }));
-    
-    res.json(chats);
-  } catch (error) {
-    console.error("Error retrieving chats:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 🔹 API: Retrieve Single Chat
-app.get("/api/chats/:userId/:chatId", async (req, res) => {
-  try {
-    const { userId, chatId } = req.params;
-    const chatDoc = await db.collection("chats").doc(chatId).get();
-    
-    if (!chatDoc.exists) {
-      return res.status(404).json({ error: "Chat not found" });
-    }
-    
-    const chatData = chatDoc.data();
-    
-    // Verify that the chat belongs to the requesting user
-    if (chatData.userId !== userId) {
-      return res.status(403).json({ error: "Unauthorized access to chat" });
-    }
-    
-    res.json({ id: chatDoc.id, ...chatData });
-  } catch (error) {
-    console.error("Error retrieving chat:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 🔹 API: Update Chat Title
-app.put("/api/chats/:chatId", async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const { title } = req.body;
-    
-    await db.collection("chats").doc(chatId).update({
-      title,
-      updatedAt: new Date()
-    });
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error updating chat:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 🔹 API: Delete Chat
-app.delete("/api/chats/:chatId", async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    await db.collection("chats").doc(chatId).delete();
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting chat:", error);
-    res.status(500).json({ error: error.message });
   }
 });
 

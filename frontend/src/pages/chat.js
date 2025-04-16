@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Helmet } from "react-helmet";
 import { useNavigate } from "react-router-dom";
 import { getAuth, signOut } from "firebase/auth";
@@ -24,6 +24,7 @@ import NavigationHeader from "../components/NavigationHeader";
 import { useAuth } from "../contexts/authContext";
 import "../styles/ReferenceVerification.css";
 import "../styles/Chat.css";
+import { Pie } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
 // Import custom components
@@ -57,6 +58,10 @@ const Chat = () => {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Refs for UI interaction
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  
   const navigate = useNavigate();
   const user = useAuth(); // Retrieve the current user's UID
   const [citations, setCitations] = useState([]);
@@ -372,6 +377,18 @@ const Chat = () => {
     e.preventDefault();
     if (!input) return;
 
+    // Check if user wants to clear chat
+    if (input.trim().toLowerCase() === "clear") {
+      setMessages([
+        {
+          type: "bot",
+          text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
+        },
+      ]);
+      setInput("");
+      return;
+    }
+    
     // Check if we have an active chat session
     if (user && user.userID && !activeChatId) {
       const newChatId = await createNewChatSession(input, true);
@@ -495,6 +512,18 @@ const Chat = () => {
     }
   };
 
+  // File upload functions from main
+  const handleFileChange = (e) => {
+    if (e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setUploadedFile(file);
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
   // Function to handle file uploads
   const uploadDocument = async () => {
     if (!uploadedFile) {
@@ -597,6 +626,9 @@ const Chat = () => {
       // Reset file and progress
       setUploadedFile(null);
       setUploadProgress(0);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (error) {
       console.error("Error uploading document:", error);
       
@@ -657,7 +689,15 @@ const Chat = () => {
       return false;
     }
   }, [activeChatId]);
-  
+
+  // Function to handle key press (Enter to search)
+  const handleKeyPress = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      searchPaper(e);
+    }
+  };
+
   // UI for the three-panel layout
   return (
     <ChatContext.Provider value={{ 
@@ -715,6 +755,7 @@ const Chat = () => {
             <ChatMessages 
               messages={messages}
               isLoading={isLoading}
+              messagesEndRef={messagesEndRef}
             />
             
             {/* Chat Input */}
@@ -727,6 +768,10 @@ const Chat = () => {
               setUploadedFile={setUploadedFile}
               uploadDocument={uploadDocument}
               uploadProgress={uploadProgress}
+              handleKeyPress={handleKeyPress}
+              triggerFileInput={triggerFileInput}
+              fileInputRef={fileInputRef}
+              handleFileChange={handleFileChange}
             />
           </div>
           
