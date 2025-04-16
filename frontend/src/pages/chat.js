@@ -716,15 +716,16 @@ const Chat = () => {
         {process.env.NODE_ENV === 'development' && (
           <div style={{ 
             position: 'fixed', 
-            top: '70px', /* Adjust to be below navbar */
+            top: '80px', /* Adjust to be below navbar with more space */
             right: '10px', 
-            zIndex: 999, /* High but below navbar */
+            zIndex: 900, /* High but below navbar */
             background: 'rgba(0,0,0,0.7)', 
             color: 'lime', 
             padding: '10px', 
             borderRadius: '5px',
             maxWidth: '300px',
-            fontSize: '12px'
+            fontSize: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
           }}>
             <div>User: {user && user.userID ? `Logged in (${user.userID.substring(0,8)}...)` : 'Not logged in'}</div>
             <div>Active Chat: {activeChatId ? activeChatId.substring(0,8) + '...' : 'None'}</div>
