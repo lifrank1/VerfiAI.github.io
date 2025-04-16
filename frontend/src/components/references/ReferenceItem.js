@@ -23,7 +23,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
         console.log(`Verifying reference ${index}:`, reference);
         setIsLoading(true);
         
-        const response = await axios.post("https://verfiai.uc.r.appspot.com//api/verify-reference", {
+        const response = await axios.post("https://verfiai.uc.r.appspot.com/api/verify-reference", {
           reference,
         });
         

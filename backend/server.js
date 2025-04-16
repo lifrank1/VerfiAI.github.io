@@ -12,8 +12,8 @@ const { spawn } = require("child_process");
 // Allow CORS from frontend
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://verifai-frontend.onrender.com' 
-    : 'http://localhost:3000',
+    ? ['https://verifai-frontend.onrender.com', 'https://verifiai-3431b785f8d8.herokuapp.com', '*'] 
+    : ['http://localhost:3000', '*'],
   credentials: true,
   optionsSuccessStatus: 200
 };
