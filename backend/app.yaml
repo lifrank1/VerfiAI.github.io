@@ -36,7 +36,7 @@ readiness_check:
 
 env_variables:
   NODE_ENV: "production"
-  HUGGINGFACE_API_KEY: "YOUR_HUGGINGFACE_API_KEY"
+  HUGGINGFACE_API_KEY: "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"
   UPLOAD_DIR: "/tmp/uploads"
   PYTHONPATH: "/app/venv/lib/python3.9/site-packages"
 
