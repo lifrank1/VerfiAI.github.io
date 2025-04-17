@@ -37,14 +37,14 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
   const verifyAllReferences = async () => {
     setVerificationStats(prev => ({ ...prev, loading: true }));
     
-    // Use local server for development, remote server for production
-    const isProduction = process.env.NODE_ENV === 'production' || 
-                        window.location.hostname.includes('vercel.app') || 
-                        !window.location.hostname.includes('localhost');
-    const apiBaseUrl = isProduction
-      ? "https://verfiai.uc.r.appspot.com" 
-      : "http://localhost:3002";
-    
+    // TEMPORARILY: Always use production endpoint for testing
+    const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
+
+    console.log("Environment:", { 
+      hostname: window.location.hostname,
+      apiBaseUrl
+    });
+
     const results = await Promise.all(
       references.map(async (reference) => {
         try {
@@ -303,13 +303,8 @@ const ReferenceItem = ({ reference, index, userID }) => {
     try {
       setVerificationStatus("in_progress");
 
-      // Use local server for development, remote server for production
-      const isProduction = process.env.NODE_ENV === 'production' || 
-                          window.location.hostname.includes('vercel.app') || 
-                          !window.location.hostname.includes('localhost');
-      const apiBaseUrl = isProduction
-        ? "https://verfiai.uc.r.appspot.com" 
-        : "http://localhost:3002";
+      // TEMPORARILY: Always use production endpoint for testing
+      const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
 
       const response = await axios.post(`${apiBaseUrl}/api/verify-reference`, {
         reference,
@@ -619,13 +614,8 @@ const Chat = () => {
     const formData = new FormData();
     formData.append("file", uploadedFile);
 
-    // Use local server for development, remote server for production
-    const isProduction = process.env.NODE_ENV === 'production' || 
-                        window.location.hostname.includes('vercel.app') || 
-                        !window.location.hostname.includes('localhost');
-    const apiBaseUrl = isProduction
-      ? "https://verfiai.uc.r.appspot.com" 
-      : "http://localhost:3002";
+    // TEMPORARILY: Always use production endpoint for testing
+    const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
 
     try {
       const response = await axios.post(`${apiBaseUrl}/api/upload-document`, formData, {
@@ -789,14 +779,14 @@ const Chat = () => {
     setIsLoading(true);
 
     try {
-      // Use local server for development, remote server for production
-      const isProduction = process.env.NODE_ENV === 'production' || 
-                          window.location.hostname.includes('vercel.app') || 
-                          !window.location.hostname.includes('localhost');
-      const apiBaseUrl = isProduction
-        ? "https://verfiai.uc.r.appspot.com" 
-        : "http://localhost:3002";
+      // TEMPORARILY: Always use production endpoint for testing
+      const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
       
+      console.log("Search Paper Environment:", { 
+        hostname: window.location.hostname,
+        apiBaseUrl
+      });
+
       const response = await axios.post(`${apiBaseUrl}/api/analyze-paper`, {
         doi: input,
       });
