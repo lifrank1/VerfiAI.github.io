@@ -1,4 +1,3 @@
-
 # Dependencies
 /node_modules
 /frontend/node_modules
@@ -46,6 +45,12 @@ Thumbs.db
 #database private key
 #backend/firebase-adminsdk.json
 
+# Sensitive credentials
+backend/serviceAccountKey.json
+backend/firebase-adminsdk.json
+backend/.env
+*.json
+.env
 
 # Environment variables
 .env
