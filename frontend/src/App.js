@@ -7,7 +7,6 @@ import CreateAccountScreen from "./pages/CreateAccountScreen";
 import Chat from "./pages/chat";
 import ApiDocs from './components/ApiDocs';
 import AboutScreen from './pages/AboutScreen';
-import ContactPage from './pages/contact';
 import { AuthProvider } from "./contexts/authContext";
 
 
@@ -23,7 +22,6 @@ function App() {
         <Route path="/features" element={<Features />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/about" element={<AboutScreen />} />
-        <Route path="/contact" element={<ContactPage />} />
       </Routes>
     </Router>
     </AuthProvider>
