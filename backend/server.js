@@ -13,7 +13,7 @@ const { spawn } = require("child_process");
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://verifai-frontend.onrender.com', 'https://verifiai-3431b785f8d8.herokuapp.com', '*'] 
-    : ['http://localhost:3000', '*'],
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080', '*'],
   credentials: true,
   optionsSuccessStatus: 200
 };

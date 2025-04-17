@@ -37,10 +37,15 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
   const verifyAllReferences = async () => {
     setVerificationStats(prev => ({ ...prev, loading: true }));
     
+    // Use local server for development, remote server for production
+    const apiBaseUrl = process.env.NODE_ENV === 'production' 
+      ? "https://verfiai.uc.r.appspot.com" 
+      : "http://localhost:3002";
+    
     const results = await Promise.all(
       references.map(async (reference) => {
         try {
-          const response = await axios.post('https://verfiai.uc.r.appspot.com/api/verify-reference', {
+          const response = await axios.post(`${apiBaseUrl}/api/verify-reference`, {
             reference
           });
           return {
@@ -295,7 +300,12 @@ const ReferenceItem = ({ reference, index, userID }) => {
     try {
       setVerificationStatus("in_progress");
 
-      const response = await axios.post("https://verfiai.uc.r.appspot.com/api/verify-reference", {
+      // Use local server for development, remote server for production
+      const apiBaseUrl = process.env.NODE_ENV === 'production' 
+        ? "https://verfiai.uc.r.appspot.com" 
+        : "http://localhost:3002";
+
+      const response = await axios.post(`${apiBaseUrl}/api/verify-reference`, {
         reference,
       });
 
@@ -603,8 +613,13 @@ const Chat = () => {
     const formData = new FormData();
     formData.append("file", uploadedFile);
 
+    // Use local server for development, remote server for production
+    const apiBaseUrl = process.env.NODE_ENV === 'production' 
+      ? "https://verfiai.uc.r.appspot.com" 
+      : "http://localhost:3002";
+
     try {
-      const response = await axios.post("https://verfiai.uc.r.appspot.com/api/upload-document", formData, {
+      const response = await axios.post(`${apiBaseUrl}/api/upload-document`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -765,7 +780,12 @@ const Chat = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post("https://verfiai.uc.r.appspot.com/api/analyze-paper", {
+      // Use local server for development, remote server for production
+      const apiBaseUrl = process.env.NODE_ENV === 'production' 
+        ? "https://verfiai.uc.r.appspot.com" 
+        : "http://localhost:3002";
+      
+      const response = await axios.post(`${apiBaseUrl}/api/analyze-paper`, {
         doi: input,
       });
       const paper = response.data.paper;
