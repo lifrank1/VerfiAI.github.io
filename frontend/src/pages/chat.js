@@ -37,13 +37,9 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
   const verifyAllReferences = async () => {
     setVerificationStats(prev => ({ ...prev, loading: true }));
     
-    // Simplify environment detection to be more reliable
-    const apiBaseUrl = window.location.hostname.includes('vercel.app')
-      ? "https://verfiai.uc.r.appspot.com" 
-      : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-        ? "http://localhost:3002"
-        : "https://verfiai.uc.r.appspot.com"; // Default to production for any other domain
-    
+    // TEMPORARILY: Always use production endpoint for testing
+    const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
+
     console.log("Environment:", { 
       hostname: window.location.hostname,
       apiBaseUrl
@@ -307,12 +303,8 @@ const ReferenceItem = ({ reference, index, userID }) => {
     try {
       setVerificationStatus("in_progress");
 
-      // Simplify environment detection to be more reliable
-      const apiBaseUrl = window.location.hostname.includes('vercel.app')
-        ? "https://verfiai.uc.r.appspot.com" 
-        : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-          ? "http://localhost:3002"
-          : "https://verfiai.uc.r.appspot.com"; // Default to production for any other domain
+      // TEMPORARILY: Always use production endpoint for testing
+      const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
 
       const response = await axios.post(`${apiBaseUrl}/api/verify-reference`, {
         reference,
@@ -622,12 +614,8 @@ const Chat = () => {
     const formData = new FormData();
     formData.append("file", uploadedFile);
 
-    // Simplify environment detection to be more reliable
-    const apiBaseUrl = window.location.hostname.includes('vercel.app')
-      ? "https://verfiai.uc.r.appspot.com" 
-      : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-        ? "http://localhost:3002"
-        : "https://verfiai.uc.r.appspot.com"; // Default to production for any other domain
+    // TEMPORARILY: Always use production endpoint for testing
+    const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
 
     try {
       const response = await axios.post(`${apiBaseUrl}/api/upload-document`, formData, {
@@ -791,12 +779,8 @@ const Chat = () => {
     setIsLoading(true);
 
     try {
-      // Simplify environment detection to be more reliable
-      const apiBaseUrl = window.location.hostname.includes('vercel.app')
-        ? "https://verfiai.uc.r.appspot.com" 
-        : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-          ? "http://localhost:3002"
-          : "https://verfiai.uc.r.appspot.com"; // Default to production for any other domain
+      // TEMPORARILY: Always use production endpoint for testing
+      const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
       
       console.log("Search Paper Environment:", { 
         hostname: window.location.hostname,
