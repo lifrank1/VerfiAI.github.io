@@ -38,7 +38,10 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
     setVerificationStats(prev => ({ ...prev, loading: true }));
     
     // Use local server for development, remote server for production
-    const apiBaseUrl = process.env.NODE_ENV === 'production' 
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                        window.location.hostname.includes('vercel.app') || 
+                        !window.location.hostname.includes('localhost');
+    const apiBaseUrl = isProduction
       ? "https://verfiai.uc.r.appspot.com" 
       : "http://localhost:3002";
     
@@ -301,7 +304,10 @@ const ReferenceItem = ({ reference, index, userID }) => {
       setVerificationStatus("in_progress");
 
       // Use local server for development, remote server for production
-      const apiBaseUrl = process.env.NODE_ENV === 'production' 
+      const isProduction = process.env.NODE_ENV === 'production' || 
+                          window.location.hostname.includes('vercel.app') || 
+                          !window.location.hostname.includes('localhost');
+      const apiBaseUrl = isProduction
         ? "https://verfiai.uc.r.appspot.com" 
         : "http://localhost:3002";
 
@@ -614,7 +620,10 @@ const Chat = () => {
     formData.append("file", uploadedFile);
 
     // Use local server for development, remote server for production
-    const apiBaseUrl = process.env.NODE_ENV === 'production' 
+    const isProduction = process.env.NODE_ENV === 'production' || 
+                        window.location.hostname.includes('vercel.app') || 
+                        !window.location.hostname.includes('localhost');
+    const apiBaseUrl = isProduction
       ? "https://verfiai.uc.r.appspot.com" 
       : "http://localhost:3002";
 
@@ -781,7 +790,10 @@ const Chat = () => {
 
     try {
       // Use local server for development, remote server for production
-      const apiBaseUrl = process.env.NODE_ENV === 'production' 
+      const isProduction = process.env.NODE_ENV === 'production' || 
+                          window.location.hostname.includes('vercel.app') || 
+                          !window.location.hostname.includes('localhost');
+      const apiBaseUrl = isProduction
         ? "https://verfiai.uc.r.appspot.com" 
         : "http://localhost:3002";
       

@@ -12,7 +12,7 @@ const { spawn } = require("child_process");
 // Allow CORS from frontend
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://verifai-frontend.onrender.com', 'https://verifiai-3431b785f8d8.herokuapp.com', '*'] 
+    ? ['https://verifai-frontend.onrender.com', 'https://verifiai-3431b785f8d8.herokuapp.com', 'https://verfi-ai-frontend-git-main-frank-lis-projects-dd5cce8a.vercel.app', '*'] 
     : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080', '*'],
   credentials: true,
   optionsSuccessStatus: 200
