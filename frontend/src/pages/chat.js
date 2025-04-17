@@ -11,6 +11,8 @@ import {
   onSnapshot,
   deleteDoc,
   getDocs,
+  getDoc,
+  updateDoc,
 } from "firebase/firestore";
 import axios from "axios";
 import NavigationHeader from "../components/NavigationHeader";
@@ -18,6 +20,7 @@ import { useAuth } from "../contexts/authContext";
 import "../styles/ReferenceVerification.css";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import config from '../config';
 
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -40,7 +43,7 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
     const results = await Promise.all(
       references.map(async (reference) => {
         try {
-          const response = await axios.post('http://localhost:3002/api/verify-reference', {
+          const response = await axios.post(`${config.API_BASE_URL}/api/verify-reference`, {
             reference
           });
           return {
@@ -285,7 +288,7 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
   );
 };
 
-const ReferenceItem = ({ reference, index, userID }) => {
+const ReferenceItem = ({ reference, index, userID, autoVerify }) => {
   const [verificationStatus, setVerificationStatus] = useState(
     reference.verification_status || "pending"
   );
@@ -295,7 +298,7 @@ const ReferenceItem = ({ reference, index, userID }) => {
     try {
       setVerificationStatus("in_progress");
 
-      const response = await axios.post("http://localhost:3002/api/verify-reference", {
+      const response = await axios.post(`${config.API_BASE_URL}/api/verify-reference`, {
         reference,
       });
 
@@ -306,6 +309,13 @@ const ReferenceItem = ({ reference, index, userID }) => {
       setVerificationStatus("failed");
     }
   };
+
+  // Auto-verify on mount if autoVerify is true
+  useEffect(() => {
+    if (autoVerify && verificationStatus === "pending") {
+      verifyReference();
+    }
+  }, [autoVerify, verificationStatus]);
 
   const saveReferenceToFirestore = async (ref, userID) => {
     if (!userID) return; // Safety check
@@ -371,16 +381,65 @@ const ReferenceItem = ({ reference, index, userID }) => {
             </p>
           )}
           {reference.similarity_percentage !== undefined && (
-    <p style={{ margin: '0.25rem 0', fontSize: '0.9rem', color: '#333' }}>
-      Relatability: {reference.similarity_percentage}%
-    </p>
-  )}
-
-  {reference.similarity_score !== undefined && (
-    <p style={{ margin: '0.25rem 0', fontSize: '0.9rem', color: '#333' }}>
-      Raw Score: {reference.similarity_score.toFixed(7)}
-    </p>
-  )}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              margin: '0.25rem 0',
+              fontSize: '0.9rem',
+              color: '#333'
+            }}>
+              <span>Reliability: {reference.similarity_percentage}%</span>
+              <div 
+                style={{ 
+                  position: 'relative',
+                  marginLeft: '0.5rem',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  const tooltip = e.currentTarget.querySelector('.tooltip');
+                  tooltip.style.visibility = 'visible';
+                  tooltip.style.opacity = 1;
+                }}
+                onMouseLeave={(e) => {
+                  const tooltip = e.currentTarget.querySelector('.tooltip');
+                  tooltip.style.visibility = 'hidden';
+                  tooltip.style.opacity = 0;
+                }}
+              >
+                <span>🔍</span>
+                <div 
+                  className="tooltip"
+                  style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#333',
+                    color: 'white',
+                    padding: '0.5rem',
+                    borderRadius: '4px',
+                    fontSize: '0.8rem',
+                    width: '300px',
+                    textAlign: 'center',
+                    visibility: 'hidden',
+                    opacity: 0,
+                    transition: 'opacity 0.2s, visibility 0.2s',
+                    zIndex: 1000,
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  Reliability Score Calculation:
+                  <br />
+                  final_score = (0.7 × title_sim + 0.3 × content_sim) × 2
+                  <br />
+                  <br />
+                  • title_sim: Similarity between titles
+                  <br />
+                  • content_sim: Similarity between title + abstract
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="reference-status-container">
@@ -389,8 +448,8 @@ const ReferenceItem = ({ reference, index, userID }) => {
             <span className="status-text">{status.text}</span>
           </div>
 
-          {/* Verify Button (only if pending) */}
-          {verificationStatus === "pending" && (
+          {/* Verify Button (only if pending and not auto-verifying) */}
+          {verificationStatus === "pending" && !autoVerify && (
             <button onClick={verifyReference} className="verify-button">
               Verify
             </button>
@@ -511,19 +570,311 @@ const Chat = () => {
   const [messages, setMessages] = useState([
     {
       type: "bot",
-      text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
+      text: "Hello! Enter a paper title, DOI, or ISBN to get started.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [input, setInput] = useState("");
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [searchProgress, setSearchProgress] = useState(0);
+  const [chatHistories, setChatHistories] = useState([]);
+  const [currentChatId, setCurrentChatId] = useState(null);
+  const [editingChatId, setEditingChatId] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [chatInputs, setChatInputs] = useState([]); // Store user inputs for replay
 
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const user = useAuth(); // Retrieve the current user's UID
+  const user = useAuth();
   const [citations, setCitations] = useState([]);
+
+  // Listen for real-time updates to chat histories
+  useEffect(() => {
+    const fetchChatHistories = () => {
+      if (!user || !user.userID) return;
+
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const chatsRef = collection(userRef, "chats");
+
+      // Listen for real-time updates
+      const unsubscribe = onSnapshot(chatsRef, (querySnapshot) => {
+        const chatData = querySnapshot.docs.map((doc) => ({
+          ...doc.data(),
+          id: doc.id,
+        }));
+        setChatHistories(chatData);
+      });
+
+      return () => unsubscribe();
+    };
+
+    fetchChatHistories();
+  }, [user]);
+
+  // Load chat from Firestore and replay the conversation
+  const loadChat = async (chatId) => {
+    if (!user || !user.userID) return;
+
+    try {
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const chatDoc = doc(userRef, "chats", chatId);
+      const chatSnap = await getDoc(chatDoc);
+
+      if (chatSnap.exists()) {
+        const chatData = chatSnap.data();
+        setCurrentChatId(chatId);
+        
+        // Set the existing messages from the chat history
+        setMessages(chatData.messages);
+        
+        // Extract user inputs from the chat history for replay if needed
+        const userInputs = chatData.messages
+          .filter(msg => msg.type === "user")
+          .map(msg => msg.text);
+        
+        setChatInputs(userInputs);
+      }
+    } catch (error) {
+      console.error("Error loading chat:", error);
+    }
+  };
+
+  // Modify searchPaper to accept input parameter
+  const searchPaper = async (inputText = input) => {
+    if (!inputText.trim()) return;
+    setIsLoading(true);
+    setSearchProgress(0);
+
+    try {
+      const userMessage = { type: "user", text: inputText };
+      await handleNewMessage(userMessage);
+
+      let response;
+      if (isISBN(inputText)) {
+        response = await axios.post(`${config.API_BASE_URL}/api/isbn-citation`, {
+          isbn: inputText,
+        });
+      } else {
+        // Simulate progress updates
+        const progressInterval = setInterval(() => {
+          setSearchProgress(prev => {
+            if (prev >= 90) {
+              clearInterval(progressInterval);
+              return prev;
+            }
+            return prev + 10;
+          });
+        }, 500);
+
+        response = await axios.post(`${config.API_BASE_URL}/api/analyze-paper`, {
+          doi: inputText,
+        });
+
+        clearInterval(progressInterval);
+        setSearchProgress(100);
+      }
+
+      const paper = response.data.paper;
+      console.log("Received paper:", paper);
+
+      // Format the response message
+      const formattedMessage = (
+        <div>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            marginBottom: '1rem'
+          }}>
+            <h3 style={{ margin: 0 }}>Paper Details</h3>
+            <VerificationStatsButton 
+              references={paper.references || []} 
+              user={user}
+              saveReferenceToFirestore={saveCitationToFirestore}
+            />
+          </div>
+          <p>
+            <b>📌 Title:</b> {paper.title}
+          </p>
+          <p>
+            <b>👥 Authors:</b>
+          </p>
+          <ul style={{ paddingLeft: "2rem" }}>
+            {paper.authors.map((author, index) => (
+              <li key={index} style={{ marginBottom: "0.3rem" }}>
+                {author}
+              </li>
+            ))}
+          </ul>
+          <p>
+            <b>📊 Research Field:</b> {paper.research_field?.field || "Unspecified"}
+          </p>
+          <p>
+            <b>📅 Year:</b> {paper.year}
+          </p>
+          <p>
+            <b>🔗 DOI:</b> {paper.doi}
+          </p>
+          {paper.is_retracted ? (
+            <div>
+              <p style={{ color: "red", fontWeight: "bold" }}>🚨 This paper may be retracted!</p>
+              <ul style={{ paddingLeft: "2rem" }}>
+                {paper.retraction_info.map((item, idx) => (
+                  <li key={idx} style={{ marginBottom: "0.5rem" }}>
+                    <b>📌 Title:</b> {item.title}
+                    <br />
+                    <b>🔗 DOI:</b> {item.doi}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>
+          )}
+          {paper.references && paper.references.length > 0 && (
+            <div className="references-container">
+              <h4 className="references-title">
+                References ({paper.references.length})
+              </h4>
+              <ul className="references-list">
+                {paper.references.map((ref, idx) => (
+                  <ReferenceItem
+                    key={idx}
+                    reference={ref}
+                    index={idx}
+                    userID={user && user.userID}
+                    autoVerify={true}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      );
+
+      const botMessage = { type: "bot", text: formattedMessage };
+      await handleNewMessage(botMessage);
+    } catch (error) {
+      const errorMessage = {
+        type: "bot",
+        text: "Error analyzing paper. Please check the DOI and try again.",
+      };
+      await handleNewMessage(errorMessage);
+    } finally {
+      setIsLoading(false);
+      setInput("");
+    }
+  };
+
+  // Modify handleNewMessage to only save user inputs
+  const handleNewMessage = async (newMessage) => {
+    try {
+      const updatedMessages = [...messages, newMessage];
+      setMessages(updatedMessages);
+
+      if (!user || !user.userID) return; // Don't save if not logged in
+
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+
+      if (currentChatId) {
+        // Update existing chat
+        const chatDoc = doc(userRef, "chats", currentChatId);
+        await updateDoc(chatDoc, {
+          messages: updatedMessages,
+          timestamp: new Date()
+        });
+      } else {
+        // Create a new chat only if there isn't one
+        const title = newMessage.type === "user" 
+          ? newMessage.text.substring(0, 30) + "..."
+          : "New Chat";
+        
+        const chatsRef = collection(userRef, "chats");
+
+        const newChat = {
+          title: title,
+          messages: updatedMessages,
+          timestamp: new Date(),
+          userID: user.userID,
+        };
+
+        const docRef = await addDoc(chatsRef, newChat);
+        setCurrentChatId(docRef.id);
+      }
+    } catch (error) {
+      console.error("Error saving message:", error);
+    }
+  };
+
+  // Delete chat from Firestore
+  const deleteChat = async (chatId) => {
+    if (!user || !user.userID) return;
+
+    try {
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const chatDoc = doc(userRef, "chats", chatId);
+      await deleteDoc(chatDoc);
+      
+      if (currentChatId === chatId) {
+        setMessages([{
+          type: "bot",
+          text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
+        }]);
+        setCurrentChatId(null);
+      }
+    } catch (error) {
+      console.error("Error deleting chat:", error);
+    }
+  };
+
+  // Delete all chats
+  const deleteAllChats = async () => {
+    if (!user || !user.userID) return;
+
+    try {
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const chatsRef = collection(userRef, "chats");
+      
+      const snapshot = await getDocs(chatsRef);
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      setMessages([{
+        type: "bot",
+        text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
+      }]);
+      setCurrentChatId(null);
+    } catch (error) {
+      console.error("Error deleting all chats:", error);
+    }
+  };
+
+  // Delete all citations
+  const deleteAllCitations = async () => {
+    if (!user || !user.userID) return;
+    
+    try {
+      const db = getFirestore(firebaseApp);
+      const userRef = doc(db, "users", user.userID);
+      const citationsRef = collection(userRef, "citations");
+      
+      // Get all citations
+      const snapshot = await getDocs(citationsRef);
+      
+      // Delete each citation
+      const deletePromises = snapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      
+      await Promise.all(deletePromises);
+      console.log("All citations deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting all citations:", error);
+    }
+  };
 
   // Listen for real-time updates to citations
   useEffect(() => {
@@ -576,300 +927,6 @@ const Chat = () => {
     return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ""));
   };
 
-  // ---- FILE UPLOAD FUNCTIONS (from main) ----
-  const handleFileChange = (e) => {
-    if (e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setUploadedFile(file);
-    }
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
-  };
-
-  const uploadDocument = async () => {
-    if (!uploadedFile) return;
-
-    setIsLoading(true);
-    setMessages((prev) => [
-      ...prev,
-      {
-        type: "user",
-        text: `Uploading document: ${uploadedFile.name}`,
-      },
-    ]);
-
-    const formData = new FormData();
-    formData.append("file", uploadedFile);
-
-    try {
-      const response = await axios.post("http://localhost:3002/api/upload-document", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setUploadProgress(percentCompleted);
-        },
-      });
-
-      const documentData = response.data;
-
-      // Format the document analysis results
-      const formattedMessage = (
-        <div>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center',
-            marginBottom: '1rem'
-          }}>
-            <h3 style={{ margin: 0 }}>Document Analysis</h3>
-            <VerificationStatsButton 
-              references={documentData.references ? documentData.references.map(ref => ({ 
-                title: ref,
-                unstructured: ref 
-              })) : []} 
-              user={user}
-              saveReferenceToFirestore={saveCitationToFirestore}
-            />
-          </div>
-          <p>
-            <b>📄 File Name:</b> {documentData.file_name || uploadedFile.name}
-          </p>
-          <p>
-            <b>📋 File Type:</b>{" "}
-            {documentData.file_type || uploadedFile.name.split(".").pop()}
-          </p>
-
-          {documentData.metadata && (
-            <div>
-              <h4>Metadata</h4>
-              {documentData.metadata.title && (
-                <p>
-                  <b>Title:</b> {documentData.metadata.title}
-                </p>
-              )}
-              {documentData.metadata.authors && (
-                <div>
-                  <p>
-                    <b>Authors:</b>
-                  </p>
-                  <ul style={{ paddingLeft: "2rem" }}>
-                    {documentData.metadata.authors.map((author, idx) => (
-                      <li key={idx}>{author}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {documentData.metadata.abstract && (
-                <p>
-                  <b>Abstract:</b> {documentData.metadata.abstract}
-                </p>
-              )}
-              {documentData.metadata.keywords && (
-                <p>
-                  <b>Keywords:</b> {documentData.metadata.keywords.join(", ")}
-                </p>
-              )}
-            </div>
-          )}
-
-          {documentData.citation_style && (
-            <p>
-              <b>Citation Style:</b> {documentData.citation_style}
-            </p>
-          )}
-
-          {documentData.references && documentData.references.length > 0 && (
-            <div className="references-container">
-              <h4 className="references-title">
-                References ({documentData.references.length})
-              </h4>
-              <ul className="references-list">
-                {documentData.references.map((ref, idx) => (
-                  <ReferenceItem
-                    key={idx}
-                    reference={{ unstructured: ref }}
-                    index={idx}
-                  />
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      );
-
-      setMessages((prev) => [...prev, { type: "bot", text: formattedMessage }]);
-
-      // Save to Firestore if there's valid metadata
-      if (
-        user &&
-        user.userID &&
-        documentData.metadata &&
-        documentData.metadata.title
-      ) {
-        await saveCitationToFirestore(
-          {
-            title: documentData.metadata.title,
-            authors: documentData.metadata.authors || [],
-            research_field: { field: "Document Upload" },
-            year: new Date().getFullYear().toString(),
-            doi: "N/A",
-            is_retracted: false,
-          },
-          user.userID
-        );
-      }
-
-      // Reset file input
-      setUploadedFile(null);
-      setUploadProgress(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    } catch (error) {
-      console.error("Error uploading document:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          text: "Error analyzing the document. Please check the file format and try again.",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ---- END FILE UPLOAD FUNCTIONS ----
-
-  // Search a paper by DOI/Title/ISBN
-  const searchPaper = async () => {
-    if (input.trim() === "") return;
-
-    if (input.trim().toLowerCase() === "clear") {
-      setMessages([
-        {
-          type: "bot",
-          text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
-        },
-      ]);
-      setInput("");
-      return;
-    }
-
-    setMessages((prev) => [...prev, { type: "user", text: input }]);
-    setIsLoading(true);
-
-    try {
-      const response = await axios.post("http://localhost:3002/api/analyze-paper", {
-        doi: input,
-      });
-      const paper = response.data.paper;
-      console.log("Received paper:", paper);
-
-      let retractionNotice = paper.is_retracted ? (
-        <div>
-          <p style={{ color: "red", fontWeight: "bold" }}>🚨 This paper may be retracted!</p>
-          <ul style={{ paddingLeft: "2rem" }}>
-            {paper.retraction_info.map((item, idx) => (
-              <li key={idx} style={{ marginBottom: "0.5rem" }}>
-                <b>📌 Title:</b> {item.title}
-                <br />
-                <b>🔗 DOI:</b> {item.doi}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p style={{ color: "green" }}>✅ This paper does not appear to be retracted.</p>
-      );
-
-      const references = (
-        <div className="references-container">
-          <h4 className="references-title">
-            References{" "}
-            {paper.references && paper.references.length > 0
-              ? `(${paper.references.length})`
-              : ""}
-          </h4>
-          {paper.references && paper.references.length > 0 ? (
-            <ul className="references-list">
-              {paper.references.map((ref, idx) => (
-                <ReferenceItem
-                  key={idx}
-                  reference={ref}
-                  index={idx}
-                  userID={user && user.userID}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p>No references available for this paper.</p>
-          )}
-        </div>
-      );
-
-      const formattedMessage = (
-        <div>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center',
-            marginBottom: '1rem'
-          }}>
-            <h3 style={{ margin: 0 }}>Paper Details</h3>
-            <VerificationStatsButton 
-              references={paper.references || []} 
-              user={user}
-              saveReferenceToFirestore={saveCitationToFirestore}
-            />
-          </div>
-          <p>
-            <b>📌 Title:</b> {paper.title}
-          </p>
-          <p>
-            <b>👥 Authors:</b>
-          </p>
-          <ul style={{ paddingLeft: "2rem" }}>
-            {paper.authors.map((author, index) => (
-              <li key={index} style={{ marginBottom: "0.3rem" }}>
-                {author}
-              </li>
-            ))}
-          </ul>
-          <p>
-            <b>📊 Research Field:</b> {paper.research_field?.field || "Unspecified"}
-          </p>
-          <p>
-            <b>📅 Year:</b> {paper.year}
-          </p>
-          <p>
-            <b>🔗 DOI:</b> {paper.doi}
-          </p>
-          {retractionNotice}
-          {references}
-        </div>
-      );
-
-      setMessages((prev) => [...prev, { type: "bot", text: formattedMessage }]);
-
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "bot",
-          text: "Error analyzing paper. Please check the DOI and try again.",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-      setInput("");
-    }
-  };
-
   // Save any paper-like object to Firestore
   const saveCitationToFirestore = async (paper, userID) => {
     if (!userID) return;
@@ -919,381 +976,436 @@ const Chat = () => {
     }
   };
 
-  const deleteAllCitations = async () => {
+  // Update chat title in Firestore
+  const updateChatTitle = async (chatId, newTitle) => {
     if (!user || !user.userID) return;
-    
+
     try {
       const db = getFirestore(firebaseApp);
       const userRef = doc(db, "users", user.userID);
-      const citationsRef = collection(userRef, "citations");
+      const chatDoc = doc(userRef, "chats", chatId);
       
-      // Get all citations
-      const snapshot = await getDocs(citationsRef);
-      
-      // Delete each citation
-      const deletePromises = snapshot.docs.map(doc => 
-        deleteDoc(doc.ref)
-      );
-      
-      await Promise.all(deletePromises);
-      console.log("All citations deleted successfully!");
+      await updateDoc(chatDoc, {
+        title: newTitle
+      });
     } catch (error) {
-      console.error("Error deleting all citations:", error);
+      console.error("Error updating chat title:", error);
+    }
+  };
+
+  const handleEditStart = (chat) => {
+    setEditingChatId(chat.id);
+    setEditTitle(chat.title);
+  };
+
+  const handleEditSave = async (chatId) => {
+    if (editTitle.trim() !== '') {
+      await updateChatTitle(chatId, editTitle.trim());
+    }
+    setEditingChatId(null);
+    setEditTitle("");
+  };
+
+  const handleEditKeyPress = (e, chatId) => {
+    if (e.key === 'Enter') {
+      handleEditSave(chatId);
     }
   };
 
   return (
     <>
       <NavigationHeader />
-
       <Helmet>
-        <title>Research Paper Validator - VerifAI</title>
-        <meta name="description" content="Validate and cite research papers" />
+        <title>VerifAI - Chat</title>
         <style>
           {`
-            body {
-              margin-top: 6rem;
-              margin: 0;
-              padding: 0;
-              background-color: #E6E6FA;
-              height: 100vh;
-              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            @keyframes gradient-animation {
+              0% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+              100% { background-position: 0% 50%; }
             }
-            @keyframes loading {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(400%); }
-            }
-            .file-upload-container {
-              display: flex;
-              align-items: center;
-              margin-bottom: 1rem;
-            }
-            .file-upload-button {
-              background: #6E44FF;
-              color: white;
-              border: none;
-              padding: 0.5rem 1rem;
-              border-radius: 8px;
-              cursor: pointer;
-              font-size: 0.9rem;
-              margin-right: 0.5rem;
-            }
-            .file-name {
-              margin-left: 0.5rem;
-              font-size: 0.9rem;
-              color: #555;
-            }
-            .upload-progress {
-              height: 4px;
-              background: #f0f0f0;
-              border-radius: 2px;
-              margin-top: 0.5rem;
-              overflow: hidden;
-            }
-            .upload-progress-bar {
+            .progress-bar {
+              width: 100%;
               height: 100%;
               background: #6E44FF;
               border-radius: 2px;
               transition: width 0.3s ease;
             }
+            .sidebar {
+              background: #f8f9fa;
+              border-right: 1px solid #e9ecef;
+              height: calc(100vh - 6rem);
+              position: fixed;
+              top: 6rem;
+              width: 300px;
+              display: flex;
+              flex-direction: column;
+              padding: 1.5rem 1rem;
+              overflow-y: auto;
+            }
+            .main-content {
+              margin-left: 300px;
+              margin-right: 300px;
+              height: calc(100vh - 6rem);
+              display: flex;
+              flex-direction: column;
+              padding: 1.5rem;
+              background: #fff;
+              position: relative;
+            }
+            .chat-messages {
+              flex: 1;
+              overflow-y: auto;
+              padding: 1rem;
+              display: flex;
+              flex-direction: column;
+              gap: 1rem;
+              scroll-behavior: smooth;
+              margin-bottom: 25px;
+            }
+            .message {
+              max-width: 80%;
+              padding: 1rem;
+              border-radius: 12px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            .user-message {
+              background: #6E44FF;
+              color: white;
+              margin-left: auto;
+            }
+            .bot-message {
+              background: #f7f7f8;
+              color: #333;
+              margin-right: auto;
+            }
+            .input-area {
+              position: fixed;
+              bottom: 0;
+              left: 300px;
+              right: 300px;
+              padding: 1.5rem;
+              background: #fff;
+              border-top: 1px solid #e9ecef;
+              box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+              z-index: 100;
+            }
+            .search-section {
+              display: flex;
+              gap: 1rem;
+              margin-bottom: 0.5rem;
+              background: #f8f9fa;
+              padding: 1rem;
+              border-radius: 8px;
+              border: 1px solid #e9ecef;
+              margin: 0 auto;
+              max-width: 800px;
+            }
+            .button {
+              padding: 0.8rem 1.5rem;
+              background: #6E44FF;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              white-space: nowrap;
+            }
+            .input {
+              flex: 1;
+              padding: 0.8rem 1.2rem;
+              border-radius: 8px;
+              border: 1px solid #e9ecef;
+              font-size: 1rem;
+              transition: border-color 0.2s ease;
+              margin: 0;
+            }
+            .input:focus {
+              outline: none;
+              border-color: #6E44FF;
+            }
+            .progress-container {
+              width: 100%;
+              height: 4px;
+              background: #e9ecef;
+              border-radius: 2px;
+              overflow: hidden;
+              margin-top: 0.5rem;
+            }
+            .sidebar-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 1.5rem;
+              padding-bottom: 1rem;
+              border-bottom: 1px solid #e9ecef;
+            }
+            .sidebar-title {
+              margin: 0;
+              background: linear-gradient(270deg, #6E44FF, #FF4D4D);
+              background-size: 200% auto;
+              color: transparent;
+              -webkit-background-clip: text;
+              background-clip: text;
+              animation: gradient-animation 10s ease infinite;
+              font-size: 1.5rem;
+            }
+            .chat-item {
+              background: #fff;
+              padding: 0.5rem;
+              border-radius: 8px;
+              margin-bottom: 1rem;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+              transition: all 0.2s ease;
+              cursor: pointer;
+            }
+            .chat-item:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            .chat-item.active {
+              background: #6E44FF;
+              color: white;
+            }
+            .citation-item {
+              background: #fff;
+              padding: 1rem;
+              border-radius: 8px;
+              margin-bottom: 1rem;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            .citation-title {
+              color: #333;
+              text-decoration: none;
+              font-weight: bold;
+              display: block;
+              margin-bottom: 0.5rem;
+            }
+            .citation-title:hover {
+              text-decoration: underline;
+            }
+            .citation-meta {
+              color: #666;
+              font-size: 0.9rem;
+              margin-bottom: 0.5rem;
+            }
+            .delete-button {
+              background: #dc3545;
+              color: white;
+              border: none;
+              padding: 0.4rem 0.8rem;
+              border-radius: 4px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+            .delete-button:hover {
+              background: #c82333;
+            }
           `}
         </style>
       </Helmet>
 
-      <div
-        style={{
-          display: "flex",
-          height: "100vh",
-          margin: "0 auto",
-          background: "white",
-          boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-        }}
-      >
-        {/* Sidebar */}
-        <div
-          style={{
-            marginTop: "6rem",
-            width: "300px",
-            height: "100vh",
-            backgroundColor: "#e5e5e5",
-            color: "white",
-            padding: "1.5rem 1rem",
-            display: "flex",
-            flexDirection: "column",
-            position: "fixed",
-            top: "0",
-            left: "0",
-            bottom: "0",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem"
-            }}
-          >
-            <h1
-              style={{
-                margin: 0,
-                background: "linear-gradient(270deg, #6E44FF, #FF4D4D)",
-                backgroundSize: "200% auto",
-                color: "transparent",
-                WebkitBackgroundClip: "text",
-                backgroundClip: "text",
-                animation: "gradient-animation 10s ease infinite",
-                fontSize: "1.5rem",
-              }}
-            >
-              Citations
-            </h1>
-            {citations.length > 0 && (
+      <div style={{ display: "flex", height: "100vh", background: "#fff" }}>
+        {/* Chat History Sidebar */}
+        <div className="sidebar" style={{ left: 0 }}>
+          <div className="sidebar-header">
+            <h1 className="sidebar-title">Chats</h1>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
-                onClick={deleteAllCitations}
-                style={{
-                  backgroundColor: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "0.8rem"
+                onClick={() => {
+                  setMessages([{
+                    type: "bot",
+                    text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
+                  }]);
+                  setCurrentChatId(null);
                 }}
+                className="button"
+                style={{ fontSize: "0.8rem", padding: "0.4rem 0.8rem" }}
               >
-                Delete All
+                New Chat
               </button>
-            )}
+              {chatHistories.length > 0 && (
+                <button
+                  onClick={deleteAllChats}
+                  className="delete-button"
+                  style={{ fontSize: "0.8rem" }}
+                >
+                  Delete All
+                </button>
+              )}
+            </div>
           </div>
 
-          <div
-            style={{
-              marginTop: "1rem",
-              paddingTop: "0.5rem",
-              overflowY: "auto",
-              maxHeight: "85%",
-            }}
-          >
-            {citations.length > 0 ? (
-              citations.map((citation, idx) => (
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {chatHistories.length > 0 ? (
+              chatHistories.map((chat) => (
                 <div
-                  key={citation.id}
-                  style={{
-                    marginBottom: "1rem",
-                    background: "#fff",
-                    padding: "0.5rem",
-                    borderRadius: "8px",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  }}
+                  key={chat.id}
+                  className={`chat-item ${currentChatId === chat.id ? 'active' : ''}`}
+                  onClick={() => !editingChatId && loadChat(chat.id)}
                 >
-                  <p style={{ color: "#333" }}>
-                    <b>{citation.title}</b>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    {editingChatId === chat.id ? (
+                      <input
+                        type="text"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyPress={(e) => handleEditKeyPress(e, chat.id)}
+                        onBlur={() => handleEditSave(chat.id)}
+                        className="input"
+                        autoFocus
+                      />
+                    ) : (
+                      <p style={{ margin: 0, flex: 1 }}>
+                        <b>{chat.title}</b>
+                      </p>
+                    )}
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (editingChatId === chat.id) {
+                          handleEditSave(chat.id);
+                        } else {
+                          handleEditStart(chat);
+                        }
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: '1rem',
+                        opacity: 0.7,
+                        transition: 'opacity 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.opacity = 1}
+                      onMouseLeave={(e) => e.target.style.opacity = 0.7}
+                    >
+                      {editingChatId === chat.id ? '💾' : '✏️'}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: "0.8rem", margin: "0.5rem 0" }}>
+                    {new Date(chat.timestamp).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </p>
-                  <p style={{ color: "#555" }}>
-                    {citation.authors && Array.isArray(citation.authors)
-                      ? citation.authors.join(", ")
-                      : "No authors available"}
-                  </p>
-                  <p style={{ color: "#555" }}>Year: {citation.year}</p>
-                  {citation.doi && (
-                    <p>
-                      <a
-                        href={`https://doi.org/${citation.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        DOI
-                      </a>
-                    </p>
-                  )}
-
-                  {/* DELETE BUTTON */}
                   <button
-                    onClick={() => deleteCitation(citation.id)}
-                    style={{
-                      marginTop: "0.5rem",
-                      backgroundColor: "#dc3545",
-                      color: "white",
-                      border: "none",
-                      padding: "0.4rem 0.8rem",
-                      borderRadius: "4px",
-                      cursor: "pointer",
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteChat(chat.id);
                     }}
+                    className="delete-button"
+                    style={{ fontSize: "0.8rem" }}
                   >
                     Delete
                   </button>
                 </div>
               ))
             ) : (
-              <p>No citations saved yet!</p>
+              <p style={{ color: "#666", textAlign: "center" }}>No chat histories yet!</p>
             )}
           </div>
         </div>
 
         {/* Main content area */}
-        <div
-          style={{
-            marginTop: "6rem",
-            marginLeft: "300px",
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            padding: "1rem",
-          }}
-        >
-          {/* Chat Messages */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: "1rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "1rem",
-            }}
-            ref={messagesEndRef}
-          >
+        <div className="main-content">
+          <div className="chat-messages" ref={messagesEndRef}>
             {messages.map((message, index) => (
               <div
                 key={index}
-                style={{
-                  display: "flex",
-                  justifyContent:
-                    message.type === "user" ? "flex-end" : "flex-start",
-                  padding: "0.5rem 1rem",
-                }}
+                className={`message ${message.type === "user" ? "user-message" : "bot-message"}`}
               >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    padding: "1rem",
-                    borderRadius: "12px",
-                    background: message.type === "user" ? "#6E44FF" : "#f7f7f8",
-                    color: message.type === "user" ? "white" : "#333",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  }}
-                >
-                  {message.text}
-                </div>
+                {message.text}
               </div>
             ))}
-
-            {isLoading && (
-              <div
-                style={{
-                  padding: "1rem",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <div
-                  style={{
-                    width: "80%",
-                    height: "4px",
-                    background: "#f0f0f0",
-                    borderRadius: "2px",
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "30%",
-                      height: "100%",
-                      background: "#6E44FF",
-                      animation: "loading 1s infinite linear",
-                      borderRadius: "2px",
-                    }}
-                  />
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Search Bar + File Upload Section */}
-          <div
-            style={{
-              padding: "1rem",
-              borderTop: "1px solid #e5e5e5",
-              background: "white",
-            }}
-          >
-            {/* File Upload Controls */}
-            <div className="file-upload-container">
+          <div className="input-area">
+            <div className="search-section">
               <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                style={{ display: "none" }}
-                accept=".pdf,.docx,.txt"
-              />
-              <button className="file-upload-button" onClick={triggerFileInput}>
-                Upload Document
-              </button>
-
-              {uploadedFile && (
-                <>
-                  <span className="file-name">{uploadedFile.name}</span>
-                  <button
-                    className="file-upload-button"
-                    onClick={uploadDocument}
-                    style={{ marginLeft: "0.5rem" }}
-                  >
-                    Analyze
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Upload Progress Bar */}
-            {uploadProgress > 0 && uploadProgress < 100 && (
-              <div className="upload-progress">
-                <div
-                  className="upload-progress-bar"
-                  style={{ width: `${uploadProgress}%` }}
-                ></div>
-              </div>
-            )}
-
-            {/* Search Input for DOIs / Titles */}
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                maxWidth: "800px",
-                margin: "0 auto",
-              }}
-            >
-              <input
+                type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Enter paper title, DOI, or ISBN..."
-                style={{
-                  flex: 1,
-                  padding: "0.75rem",
-                  borderRadius: "8px",
-                  border: "1px solid #e5e5e5",
-                  fontSize: "1rem",
-                  outline: "none",
-                }}
+                className="input"
               />
               <button
                 onClick={searchPaper}
-                style={{
-                  background: "#FF4D4D",
-                  color: "white",
-                  border: "none",
-                  padding: "0.75rem 1.5rem",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "1rem",
-                  transition: "background-color 0.3s ease",
-                }}
+                disabled={isLoading}
+                className="button"
               >
-                Search
+                {isLoading ? "Searching..." : "Search"}
               </button>
             </div>
+
+            {searchProgress > 0 && searchProgress < 100 && (
+              <div className="progress-container">
+                <div
+                  className="progress-bar"
+                  style={{ width: `${searchProgress}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Citations Sidebar */}
+        <div className="sidebar" style={{ right: 0 }}>
+          <div className="sidebar-header">
+            <h1 className="sidebar-title">Citations</h1>
+            {citations.length > 0 && (
+              <button
+                onClick={deleteAllCitations}
+                className="delete-button"
+                style={{ fontSize: "0.8rem" }}
+              >
+                Delete All
+              </button>
+            )}
+          </div>
+
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {citations.length > 0 ? (
+              citations.map((citation) => (
+                <div key={citation.id} className="citation-item">
+                  <a
+                    href={citation.doi ? `https://doi.org/${citation.doi}` : `https://scholar.google.com/scholar?q=${encodeURIComponent(citation.title)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="citation-title"
+                  >
+                    {citation.title}
+                  </a>
+                  <p className="citation-meta">
+                    {citation.authors && Array.isArray(citation.authors)
+                      ? citation.authors.join(", ")
+                      : "No authors available"}
+                  </p>
+                  <p className="citation-meta">Year: {citation.year}</p>
+                  {citation.doi && (
+                    <a
+                      href={`https://doi.org/${citation.doi}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#6E44FF", textDecoration: "none" }}
+                    >
+                      DOI
+                    </a>
+                  )}
+                  <button
+                    onClick={() => deleteCitation(citation.id)}
+                    className="delete-button"
+                    style={{ marginTop: "0.5rem" }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p style={{ color: "#666", textAlign: "center" }}>No citations saved yet!</p>
+            )}
           </div>
         </div>
       </div>

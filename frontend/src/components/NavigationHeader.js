@@ -1,12 +1,25 @@
 // NavigationHeader.js
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/authContext"; // Import the custom hook
 import "../styles/HomeScreen.css"; 
 import logo from "../assets/verifaiLogo.png"; 
+import { getAuth, signOut } from 'firebase/auth';
+import { firebaseApp } from '../firebase-config';
 
 const NavigationHeader = () => {
   const { isLoggedIn, login, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    const auth = getAuth(firebaseApp);
+    try {
+      await signOut(auth);
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out: ', error);
+    }
+  };
 
   return (
     <header className="nav-header">
@@ -23,20 +36,11 @@ const NavigationHeader = () => {
         </nav>
       </div>
       <div className="nav-buttons">
-        <div className="login-button-container">
-          {isLoggedIn ? (
-            <Link to ="/">
-            <button className="login-button" onClick={logout}>
-              Log Out
-            </button>
-            </Link>
-          ) : (
-            <Link to="/LoginScreen">
-              <button className="login-button">Log In</button>
-            </Link>
-          )}
-        </div>
-        {!isLoggedIn && (
+        {isLoggedIn ? (
+          <button className="login-button" onClick={handleLogout}>
+            Log Out
+          </button>
+        ) : (
           <div className="create-account-button-container">
             <Link to="/create-account">
               <button className="create-account-button">Create Account</button>

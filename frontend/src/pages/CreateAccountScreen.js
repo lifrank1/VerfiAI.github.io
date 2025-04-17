@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/LoginScreen.css'; 
 import NavigationHeader from '../components/NavigationHeader';
+import config from '../config';
 
 function CreateAccount() {
   const [email, setEmail] = useState('');
@@ -23,7 +24,7 @@ function CreateAccount() {
     }
 
     try {
-      const response = await fetch('http://localhost:3002/api/create-user', {
+      const response = await fetch(`${config.API_BASE_URL}/api/create-user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, firstName, lastName }),

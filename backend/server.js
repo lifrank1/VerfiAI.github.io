@@ -1,5 +1,6 @@
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const express = require("express");
@@ -10,9 +11,10 @@ const multer = require("multer");
 const { spawn } = require("child_process");
 
 // 🔹 Initialize Firebase
-const serviceAccount = require("./firebase-adminsdk.json");
+const serviceAccount = require("./serviceAccountKey.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
+  storageBucket: "verifai-3f516.appspot.com"
 });
 
 const app = express();
@@ -20,6 +22,7 @@ app.use(cors());
 app.use(express.json());
 
 const db = admin.firestore();
+const bucket = admin.storage().bucket();
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
 
 // Logging helper function
@@ -30,22 +33,7 @@ const logDebug = (...args) => {
 logDebug("Server starting...");
 
 // 🔹 Multer Configuration for File Uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    const uploadsDir = "uploads";
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir);
-      logDebug("Created uploads directory:", uploadsDir);
-    }
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const filename = Date.now() + "-" + file.originalname;
-    logDebug("Saving file as:", filename);
-    cb(null, filename);
-  },
-});
-
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // 🔹 API: Create a new user
@@ -94,13 +82,115 @@ app.post("/api/upload-document", upload.single("file"), async (req, res) => {
     logDebug("No file uploaded");
     return res.status(400).json({ error: "No file uploaded." });
   }
-  logDebug("Uploaded file:", req.file.path);
 
-  // Ensure uploads directory exists
-  if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
-    logDebug("Created uploads directory");
+  try {
+    // Upload file to Firebase Storage
+    const fileName = `${Date.now()}-${req.file.originalname}`;
+    const file = bucket.file(fileName);
+    
+    await file.save(req.file.buffer, {
+      metadata: {
+        contentType: req.file.mimetype,
+      },
+    });
+
+    // Get the public URL
+    const [url] = await file.getSignedUrl({
+      action: 'read',
+      expires: '03-01-2500', // Far future date
+    });
+
+    // Create a temporary local file for processing
+    const tempFilePath = path.join(os.tmpdir(), fileName);
+    await fs.promises.writeFile(tempFilePath, req.file.buffer);
+
+    const pythonProcess = spawn("python3", [
+      "./backend/scrapers/document_scraper.py",
+      tempFilePath,
+    ]);
+
+    let data = "";
+    let errorData = "";
+
+    pythonProcess.stdout.on("data", (chunk) => {
+      data += chunk;
+      logDebug("Python Output:", chunk.toString());
+    });
+
+    pythonProcess.stderr.on("data", (chunk) => {
+      errorData += chunk;
+      console.error("Python Error:", chunk.toString());
+    });
+
+    pythonProcess.on("close", async (code) => {
+      // Clean up temporary file
+      try {
+        await fs.promises.unlink(tempFilePath);
+      } catch (err) {
+        console.error("Error deleting temporary file:", err);
+      }
+
+      logDebug("Document scraper process exited with code:", code);
+      if (code !== 0) {
+        return res.status(500).json({ error: "Failed to process document", details: errorData });
+      }
+      try {
+        const result = JSON.parse(data);
+        logDebug("Parsed result from document_scraper:", result);
+        if (result.error) {
+          return res.status(500).json({ error: result.error, details: result.details || "" });
+        }
+        const { text: extractedText, references, metadata, citation_style } = result;
+        console.log("Saving document to Firestore with data:", {
+          fileName: req.file.originalname,
+          storagePath: fileName,
+          storageUrl: url,
+          extractedText: extractedText.substring(0, 100) + "...", // Log first 100 chars
+          references: references,
+          metadata: metadata,
+          citationStyle: citation_style,
+          uploadedAt: new Date()
+        });
+        
+        const docRef = await db.collection("documents").add({
+          fileName: req.file.originalname,
+          storagePath: fileName,
+          storageUrl: url,
+          extractedText,
+          references,
+          metadata,
+          citationStyle: citation_style,
+          uploadedAt: new Date(),
+        });
+        console.log("Document successfully saved to Firestore with ID:", docRef.id);
+        res.json({
+          success: true,
+          documentId: docRef.id,
+          extractedText,
+          references,
+          metadata,
+          citationStyle: citation_style,
+          storageUrl: url
+        });
+      } catch (e) {
+        console.error("Error parsing document result:", e);
+        res.status(500).json({ error: "Invalid JSON response", details: e.message });
+      }
+    });
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    res.status(500).json({ error: "Failed to upload file", details: error.message });
   }
+});
+
+// 🔹 API: Analyze Document
+app.post("/api/analyze-document", upload.single("file"), async (req, res) => {
+  logDebug("Analyze-document endpoint called");
+  if (!req.file) {
+    logDebug("No file uploaded");
+    return res.status(400).json({ error: "No file uploaded." });
+  }
+  logDebug("Uploaded file:", req.file.path);
 
   const pythonProcess = spawn("python3", [
     "./backend/scrapers/document_scraper.py",
@@ -131,23 +221,14 @@ app.post("/api/upload-document", upload.single("file"), async (req, res) => {
       if (result.error) {
         return res.status(500).json({ error: result.error, details: result.details || "" });
       }
-      const { text: extractedText, references, metadata, citation_style } = result;
-      const docRef = await db.collection("documents").add({
-        fileName: req.file.originalname,
-        extractedText,
-        references,
-        metadata,
-        citationStyle: citation_style,
-        uploadedAt: new Date(),
-      });
-      logDebug("Document saved to Firestore with ID:", docRef.id);
       res.json({
         success: true,
-        documentId: docRef.id,
-        extractedText,
-        references,
-        metadata,
-        citationStyle: citation_style,
+        documentData: {
+          text: result.text,
+          references: result.references,
+          metadata: result.metadata,
+          citation_style: result.citation_style
+        }
       });
     } catch (e) {
       console.error("Error parsing document result:", e);
