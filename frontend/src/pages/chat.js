@@ -40,10 +40,18 @@ const VerificationStatsButton = ({ references, user, saveReferenceToFirestore })
   const verifyAllReferences = async () => {
     setVerificationStats(prev => ({ ...prev, loading: true }));
     
+    // TEMPORARILY: Always use production endpoint for testing
+    const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
+
+    console.log("Environment:", { 
+      hostname: window.location.hostname,
+      apiBaseUrl
+    });
+
     const results = await Promise.all(
       references.map(async (reference) => {
         try {
-          const response = await axios.post(`${config.API_BASE_URL}/api/verify-reference`, {
+          const response = await axios.post(`${apiBaseUrl}/api/verify-reference`, {
             reference
           });
           return {
@@ -298,7 +306,10 @@ const ReferenceItem = ({ reference, index, userID, autoVerify }) => {
     try {
       setVerificationStatus("in_progress");
 
-      const response = await axios.post(`${config.API_BASE_URL}/api/verify-reference`, {
+      // TEMPORARILY: Always use production endpoint for testing
+      const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
+
+      const response = await axios.post(`${apiBaseUrl}/api/verify-reference`, {
         reference,
       });
 
@@ -662,30 +673,21 @@ const Chat = () => {
     setIsLoading(true);
     setSearchProgress(0);
 
+    // TEMPORARILY: Always use production endpoint for testing
+    const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
+
     try {
-      const userMessage = { type: "user", text: textToSearch };
-      await handleNewMessage(userMessage);
-
-      let response;
-      if (isISBN(textToSearch)) {
-        response = await axios.post(`${config.API_BASE_URL}/api/isbn-citation`, {
-          isbn: textToSearch,
-        });
-      } else {
-        // Simulate progress updates
-        const progressInterval = setInterval(() => {
-          setSearchProgress(prev => {
-            if (prev >= 90) {
-              clearInterval(progressInterval);
-              return prev;
-            }
-            return prev + 10;
-          });
-        }, 500);
-
-        response = await axios.post(`${config.API_BASE_URL}/api/analyze-paper`, {
-          doi: textToSearch,
-        });
+      const response = await axios.post(`${apiBaseUrl}/api/upload-document`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(percentCompleted);
+        },
+      });
 
         clearInterval(progressInterval);
         setSearchProgress(100);
@@ -881,23 +883,19 @@ const Chat = () => {
     if (!user || !user.userID) return;
 
     try {
-      const db = getFirestore(firebaseApp);
-      const userRef = doc(db, "users", user.userID);
-      const chatsRef = collection(userRef, "chats");
+      // TEMPORARILY: Always use production endpoint for testing
+      const apiBaseUrl = "https://verfiai.uc.r.appspot.com";
       
-      const snapshot = await getDocs(chatsRef);
-      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
-      
-      setMessages([{
-        type: "bot",
-        text: "Hello! Enter a paper title, DOI, or ISBN to get started. You can also upload a document for analysis.",
-      }]);
-      setCurrentChatId(null);
-    } catch (error) {
-      console.error("Error deleting all chats:", error);
-    }
-  };
+      console.log("Search Paper Environment:", { 
+        hostname: window.location.hostname,
+        apiBaseUrl
+      });
+
+      const response = await axios.post(`${apiBaseUrl}/api/analyze-paper`, {
+        doi: input,
+      });
+      const paper = response.data.paper;
+      console.log("Received paper:", paper);
 
   // Delete all citations
   const deleteAllCitations = async () => {

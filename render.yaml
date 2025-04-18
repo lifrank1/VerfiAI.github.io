@@ -1,0 +1,32 @@
+services:
+  # Backend API Service
+  - type: web
+    name: verifai-backend
+    env: node
+    rootDir: backend
+    buildCommand: chmod +x start.sh && npm install && pip install -r ../requirements.txt
+    startCommand: node server.js
+    plan: starter
+    envVars:
+      - key: NODE_VERSION
+        value: 18.18.0
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
+
+  # Frontend Static Site
+  - type: web
+    name: verifai-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    plan: starter
+    envVars:
+      - key: NODE_VERSION
+        value: 18.18.0
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html 

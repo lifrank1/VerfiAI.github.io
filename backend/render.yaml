@@ -2,13 +2,11 @@ services:
   - type: web
     name: verifai-backend
     env: node
-    buildCommand: npm install
-    startCommand: npm start
+    buildCommand: chmod +x start.sh && npm install && pip install -r ../requirements.txt
+    startCommand: node server.js
+    plan: free
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
+      - key: NODE_VERSION
+        value: 18.18.0
       - key: HUGGINGFACE_API_KEY
-        sync: false
-      # Add other environment variables from your .env file here 
+        sync: false 

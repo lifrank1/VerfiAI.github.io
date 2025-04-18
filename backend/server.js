@@ -10,6 +10,15 @@ const { HfInference } = require("@huggingface/inference");
 const multer = require("multer");
 const { spawn } = require("child_process");
 
+// Allow CORS from frontend
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://verifai-frontend.onrender.com', 'https://verifiai-3431b785f8d8.herokuapp.com', 'https://verfi-ai-frontend-git-main-frank-lis-projects-dd5cce8a.vercel.app', '*'] 
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080', '*'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // 🔹 Initialize Firebase
 const serviceAccount = require("./serviceAccountKey.json");
 admin.initializeApp({
@@ -18,7 +27,7 @@ admin.initializeApp({
 });
 
 const app = express();
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const db = admin.firestore();
@@ -604,7 +613,7 @@ app.post("/api/verify-reference", async (req, res) => {
 });
 
 // 🔹 Start the Server
-const port = 3002;
-app.listen(port, 'localhost', () => {
-  console.log(`Server running on http://localhost:${port}`);
+const port = process.env.PORT || 3002;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });

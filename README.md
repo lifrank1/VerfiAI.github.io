@@ -68,8 +68,22 @@ You can find the detailed documentation for the **frontend**, **backend**, and *
 
 
 ## System Context Diagram
-![Alt text](readmePictures/systemcontext.png)test
+![Alt text](readmePictures/systemcontext.png)
 
+## Reference Architecture Diagram
+![Alt text](readmePictures/RAD.png)
 
+## Database Diagram
+![Alt text](readmePictures/database.png)
 
+## API Detail
+![Alt text](readmePictures/api.png)
 
+## Sequence Diagram
+![Alt text](readmePictures/sd.png)
+
+## Testing Plan
+![Alt text](readmePictures/test.png)
+
+## Use Cases
+![Alt text](readmePictures/usecase.png)
