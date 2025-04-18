@@ -1,3 +1,4 @@
+const port = process.env.PORT || 3002;
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -604,7 +605,6 @@ app.post("/api/verify-reference", async (req, res) => {
 });
 
 // 🔹 Start the Server
-const port = 3002;
-app.listen(port, 'localhost', () => {
-  console.log(`Server running on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${port}`);
 });
