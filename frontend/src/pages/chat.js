@@ -684,14 +684,45 @@ const Chat = () => {
           <div style={{ 
             display: 'flex', 
             alignItems: 'center',
-            marginBottom: '1rem'
+            marginBottom: '1rem',
+            justifyContent: 'space-between'
           }}>
-            <h3 style={{ margin: 0 }}>Paper Details</h3>
-            <VerificationStatsButton 
-              references={paper.references || []} 
-              user={user}
-              saveReferenceToFirestore={saveCitationToFirestore}
-            />
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              gap: '1rem'
+            }}>
+              <h3 style={{ margin: 0 }}>Paper Details</h3>
+              <VerificationStatsButton 
+                references={paper.references || []} 
+                user={user}
+                saveReferenceToFirestore={saveCitationToFirestore}
+              />
+            </div>
+            <button
+              onClick={() => {
+                const citationData = {
+                  title: paper.title,
+                  authors: paper.authors,
+                  research_field: paper.research_field || { field: "Unspecified" },
+                  year: paper.year,
+                  doi: paper.doi,
+                  is_retracted: paper.is_retracted || false
+                };
+                saveCitationToFirestore(citationData, user?.userID);
+              }}
+              className="button"
+              style={{ 
+                fontSize: "0.9rem", 
+                padding: "0.5rem 1rem",
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+              disabled={!user?.userID}
+            >
+              <span>📑</span> Save Citation
+            </button>
           </div>
           <p>
             <b>📌 Title:</b> {paper.title}
@@ -936,19 +967,20 @@ const Chat = () => {
       const userRef = doc(db, "users", userID);
       const citationsRef = collection(userRef, "citations");
 
+      // Ensure we have all required fields with proper fallbacks
       const newCitation = {
-        title: paper.title,
-        authors: paper.authors,
-        research_field: paper.research_field.field,
-        year: paper.year,
-        doi: paper.doi,
-        retracted: paper.is_retracted,
+        title: paper.title || "Untitled Paper",
+        authors: Array.isArray(paper.authors) ? paper.authors : [],
+        research_field: paper.research_field?.field || "Unspecified",
+        year: paper.year || null,
+        doi: paper.doi || null,
+        retracted: paper.is_retracted || false,
         userID: userID,
         timestamp: new Date(),
       };
 
       await addDoc(citationsRef, newCitation);
-      console.log("Citation saved to Firestore!");
+      console.log("Citation saved to Firestore!", newCitation);
     } catch (error) {
       console.error("Error saving citation:", error);
     }
@@ -1052,6 +1084,7 @@ const Chat = () => {
               padding: 1.5rem;
               background: #fff;
               position: relative;
+              margin-top: 6rem;
             }
             .chat-messages {
               flex: 1;
@@ -1061,7 +1094,7 @@ const Chat = () => {
               flex-direction: column;
               gap: 1rem;
               scroll-behavior: smooth;
-              margin-bottom: 25px;
+              margin-bottom: 100px;
             }
             .message {
               max-width: 80%;
