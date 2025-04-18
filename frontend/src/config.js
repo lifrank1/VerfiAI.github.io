@@ -1,5 +1,5 @@
 const config = {
-    API_BASE_URL: 'http://localhost:3002'
+    API_BASE_URL: 'https://verfiai.uc.r.appspot.com'
 };
 
 export default config; 
