@@ -642,18 +642,34 @@ const Chat = () => {
 
   // Modify searchPaper to accept input parameter
   const searchPaper = async (inputText = input) => {
-    if (!inputText.trim()) return;
+    // Handle different input types
+    let textToSearch;
+    
+    // If inputText is an object (like a React event) or has a text property (like a message object)
+    if (typeof inputText === 'object' && inputText !== null) {
+      if (inputText.text) {
+        textToSearch = String(inputText.text);
+      } else if (inputText.target && inputText.target.value) {
+        textToSearch = String(inputText.target.value);
+      } else {
+        textToSearch = String(input); // Fall back to the current input state
+      }
+    } else {
+      textToSearch = String(inputText || '');
+    }
+
+    if (!textToSearch.trim()) return;
     setIsLoading(true);
     setSearchProgress(0);
 
     try {
-      const userMessage = { type: "user", text: inputText };
+      const userMessage = { type: "user", text: textToSearch };
       await handleNewMessage(userMessage);
 
       let response;
-      if (isISBN(inputText)) {
+      if (isISBN(textToSearch)) {
         response = await axios.post(`${config.API_BASE_URL}/api/isbn-citation`, {
-          isbn: inputText,
+          isbn: textToSearch,
         });
       } else {
         // Simulate progress updates
@@ -668,7 +684,7 @@ const Chat = () => {
         }, 500);
 
         response = await axios.post(`${config.API_BASE_URL}/api/analyze-paper`, {
-          doi: inputText,
+          doi: textToSearch,
         });
 
         clearInterval(progressInterval);
@@ -955,6 +971,8 @@ const Chat = () => {
 
   // Basic ISBN validation
   const isISBN = (input) => {
+    // Ensure input is a string
+    if (typeof input !== 'string') return false;
     return /^(?:\d{10}|\d{13})$/.test(input.replace(/-/g, ""));
   };
 
@@ -1004,7 +1022,7 @@ const Chat = () => {
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      searchPaper();
+      searchPaper(input); // Pass the string input directly
     }
   };
 
