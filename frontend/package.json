@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@firebase/auth": "^1.5.1",
+    "@remix-run/router": "^1.15.3",
     "axios": "^1.6.5",
     "chart.js": "^4.4.1",
     "firebase": "^10.7.2",
@@ -11,6 +12,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-helmet": "^6.1.0",
+    "react-router": "^6.21.3",
     "react-router-dom": "^6.21.3",
     "react-scripts": "5.0.1",
     "swagger-ui-react": "^5.20.2"

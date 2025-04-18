@@ -281,34 +281,74 @@ app.post("/api/chat", async (req, res) => {
 app.post("/api/analyze-paper", async (req, res) => {
   logDebug("Analyze-paper endpoint called with body:", req.body);
   const { doi } = req.body;
+  if (!doi) {
+    return res.status(400).json({ error: "DOI is required" });
+  }
+  
   console.log("Received DOI:", doi);
   const pythonCommand = process.platform === "win32" ? "python" : "python3";
-  logDebug("Using python command for DOI analysis:", pythonCommand);
-  const pythonProcess = spawn(pythonCommand, ["./backend/scrapers/doi_citation.py", doi]);
-  let data = "";
-  let errorData = "";
-  pythonProcess.stdout.on("data", (chunk) => {
-    data += chunk;
-    logDebug("DOI analysis Python stdout:", chunk.toString());
-  });
-  pythonProcess.stderr.on("data", (chunk) => {
-    errorData += chunk;
-    console.error("DOI analysis Python stderr:", chunk.toString());
-  });
-  pythonProcess.on("close", async (code) => {
-    logDebug("DOI analysis process exited with code:", code);
-    if (code !== 0) {
-      return res.status(500).json({ error: "Failed to analyze paper", details: errorData });
-    }
-    try {
-      const result = JSON.parse(data);
-      logDebug("Parsed result from doi_citation.py:", result);
-      res.json(result);
-    } catch (e) {
-      console.error("Error parsing JSON from DOI analysis:", e);
-      res.status(500).json({ error: "Invalid JSON response", details: e.message });
-    }
-  });
+  const scriptPath = path.join(__dirname, "scrapers", "doi_citation.py");
+  logDebug("Using python command for DOI analysis:", pythonCommand, "with script:", scriptPath);
+  
+  try {
+    const pythonProcess = spawn(pythonCommand, [scriptPath, doi]);
+    let data = "";
+    let errorData = "";
+
+    pythonProcess.stdout.on("data", (chunk) => {
+      data += chunk;
+      logDebug("DOI analysis Python stdout:", chunk.toString());
+    });
+
+    pythonProcess.stderr.on("data", (chunk) => {
+      errorData += chunk;
+      console.error("DOI analysis Python stderr:", chunk.toString());
+    });
+
+    pythonProcess.on("error", (err) => {
+      console.error("Failed to start Python process:", err);
+      return res.status(500).json({ 
+        error: "Failed to start Python process", 
+        details: err.message 
+      });
+    });
+
+    pythonProcess.on("close", async (code) => {
+      logDebug("DOI analysis process exited with code:", code);
+      if (code !== 0) {
+        console.error("Python process failed with code:", code);
+        console.error("Error output:", errorData);
+        return res.status(500).json({ 
+          error: "Failed to analyze paper", 
+          details: errorData || "Unknown error occurred",
+          exitCode: code
+        });
+      }
+      try {
+        const result = JSON.parse(data);
+        logDebug("Parsed result from doi_citation.py:", result);
+        if (result.error) {
+          console.error("Python script returned error:", result.error);
+          return res.status(500).json({ error: result.error });
+        }
+        res.json(result);
+      } catch (e) {
+        console.error("Error parsing JSON from DOI analysis:", e);
+        console.error("Raw response:", data);
+        res.status(500).json({ 
+          error: "Invalid JSON response", 
+          details: e.message,
+          rawResponse: data 
+        });
+      }
+    });
+  } catch (error) {
+    console.error("Unexpected error in analyze-paper endpoint:", error);
+    res.status(500).json({ 
+      error: "Unexpected error", 
+      details: error.message 
+    });
+  }
 });
 
 // 🔹 API: Get ISBN Citation
@@ -464,8 +504,9 @@ app.post("/api/verify-reference", async (req, res) => {
     if (reference.doi) {
       logDebug("Reference has DOI:", reference.doi);
       const pythonCommand = process.platform === "win32" ? "python" : "python3";
-      logDebug("Using python command:", pythonCommand);
-      const pythonProcess = spawn(pythonCommand, ["./backend/scrapers/check_paper.py", reference.doi]);
+      const scriptPath = path.join(__dirname, "scrapers", "check_paper.py");
+      logDebug("Using python command for DOI analysis:", pythonCommand, "with script:", scriptPath);
+      const pythonProcess = spawn(pythonCommand, [scriptPath, reference.doi]);
       let data = "";
       let errorData = "";
       pythonProcess.stdout.on("data", (chunk) => {
@@ -564,6 +605,6 @@ app.post("/api/verify-reference", async (req, res) => {
 
 // 🔹 Start the Server
 const port = 3002;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(port, 'localhost', () => {
+  console.log(`Server running on http://localhost:${port}`);
 });

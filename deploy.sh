@@ -36,5 +36,5 @@ cd ..
 
 echo "Deployment complete!"
 echo "Frontend will be available at: localhost:3002"
-echo "Backend API will be available at: https://backend-dot-verifiai.uc.r.appspot.com"
+echo "Backend API will be available at: http://localhost:3002"
 echo "Firebase Storage will be available at: https://firebasestorage.googleapis.com/v0/b/verifiai.appspot.com" 
