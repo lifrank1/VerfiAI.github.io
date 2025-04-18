@@ -608,3 +608,7 @@ app.post("/api/verify-reference", async (req, res) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${port}`);
 });
+
+app.get("/", (req, res) => {
+  res.json({ message: "VerifAI API Server is running" });
+});
